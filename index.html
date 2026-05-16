@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0A0A0F">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Cockpit">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Cockpit</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512.png">
+
+  <link rel="apple-touch-startup-image" href="icons/splash-1125x2436.png"
+    media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="icons/splash-1170x2532.png"
+    media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="icons/splash-1179x2556.png"
+    media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="icons/splash-1242x2688.png"
+    media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="icons/splash-1284x2778.png"
+    media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="icons/splash-1290x2796.png"
+    media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar" id="topbar">
+    <div class="topbar__date">
+      <span id="dateLabel">—</span>
+    </div>
+    <button class="weather-mini" id="weatherMini" type="button" aria-label="Météo">
+      <span class="weather-mini__icon" id="weatherIcon"></span>
+      <span class="weather-mini__temp" id="weatherTemp">—</span>
+      <span class="weather-mini__range" id="weatherRange"></span>
+    </button>
+    <button class="icon-btn" id="settingsBtn" type="button" aria-label="Réglages"></button>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab" data-tab="pro" type="button">Pro</button>
+    <button class="tab" data-tab="perso" type="button">Perso</button>
+    <span class="tabs__indicator" aria-hidden="true"></span>
+  </nav>
+
+  <main class="app">
+    <section class="pane" data-pane="pro">
+      <div class="widget" data-widget="trains-aller"></div>
+      <div class="widget" data-widget="trains-retour"></div>
+      <div class="widget" data-widget="aiwatch"></div>
+      <div class="widget" data-widget="links"></div>
+    </section>
+    <section class="pane" data-pane="perso" hidden>
+      <div class="widget" data-widget="capture"></div>
+      <div class="widget" data-widget="todos"></div>
+      <div class="widget" data-widget="habits"></div>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="settingsBackdrop">
+    <div class="modal modal--full" role="dialog" aria-modal="true" aria-label="Réglages">
+      <div class="modal__header">
+        <h2 class="modal__title">Réglages</h2>
+        <button class="modal__close" id="settingsClose" type="button">Fermer</button>
+      </div>
+      <div class="modal__body" id="settingsBody"></div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>

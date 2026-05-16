@@ -1,0 +1,95 @@
+// Date / time helpers
+export function dateKey(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export function todayKey() {
+  return dateKey(new Date());
+}
+
+export function addDays(d, n) {
+  const r = new Date(d);
+  r.setDate(r.getDate() + n);
+  return r;
+}
+
+export function parseKey(key) {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+export function formatDateLong(d) {
+  return new Intl.DateTimeFormat('fr-FR', {
+    weekday: 'long', day: 'numeric', month: 'long',
+  }).format(d);
+}
+
+export function formatTime(d) {
+  return new Intl.DateTimeFormat('fr-FR', {
+    hour: '2-digit', minute: '2-digit',
+  }).format(d);
+}
+
+export function timeAgo(date) {
+  const diff = (Date.now() - date.getTime()) / 1000;
+  if (diff < 60) return 'à l\'instant';
+  if (diff < 3600) return `il y a ${Math.floor(diff / 60)} min`;
+  if (diff < 86400) return `il y a ${Math.floor(diff / 3600)} h`;
+  if (diff < 86400 * 7) return `il y a ${Math.floor(diff / 86400)} j`;
+  return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(date);
+}
+
+// Minutes until a date, can be negative
+export function minutesUntil(date) {
+  return Math.round((date.getTime() - Date.now()) / 60000);
+}
+
+// String / DOM helpers
+export function escapeHTML(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+export function debounce(fn, delay) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), delay);
+  };
+}
+
+// Generate a short unique id
+export function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+// Try to safely parse JSON, return fallback on failure
+export function safeJSON(value, fallback) {
+  if (value == null) return fallback;
+  try { return JSON.parse(value); } catch { return fallback; }
+}
+
+// Haptic feedback (Android only; iOS no-op)
+export function haptic(ms = 8) {
+  try { if (navigator.vibrate) navigator.vibrate(ms); } catch {}
+}
+
+// Fetch with timeout
+export async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, { ...options, signal: controller.signal });
+    return resp;
+  } finally {
+    clearTimeout(t);
+  }
+}

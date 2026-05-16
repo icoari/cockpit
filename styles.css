@@ -590,6 +590,15 @@ body.theme-light .disr-row { background: rgba(20, 20, 30, 0.025); }
   font-variant-numeric: tabular-nums;
 }
 
+.disr-more {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-align: center;
+  margin-top: 6px;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ============================================================
    AI watch
    ============================================================ */

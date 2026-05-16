@@ -199,12 +199,19 @@ export class DisruptionsWidget {
     try {
       const all = await loadAll(settings.idfm.apiKey);
       // Filter to relevant + active or upcoming-15d, dedupe by id, sort
-      const seen = new Set();
+      const seenKey = new Set();
       const relevant = all
         .filter(d => d.status !== 'past')
         .filter(d => isActive(d) || isUpcomingIn15Days(d))
         .filter(d => isRelevant(d.line, d.text))
-        .filter(d => { if (seen.has(d.id)) return false; seen.add(d.id); return true; });
+        .filter(d => {
+          // Dedup by (line + first 80 chars of text) — IDFM frequently returns the
+          // same disruption multiple times with different application_periods.
+          const key = `${d.line}::${(d.text || '').slice(0, 80).toLowerCase()}`;
+          if (seenKey.has(key)) return false;
+          seenKey.add(key);
+          return true;
+        });
 
       if (relevant.length === 0) {
         // Hide the card entirely when nothing affects the user
@@ -220,14 +227,21 @@ export class DisruptionsWidget {
           return (pa?.begin || 0) - (pb?.begin || 0);
         });
 
+      const MAX_PER_SECTION = 5;
       let html = '';
       if (active.length) {
         html += `<div class="disr-section-label disr-section-label--active">En cours</div>`;
-        html += active.map(renderRow).join('');
+        html += active.slice(0, MAX_PER_SECTION).map(renderRow).join('');
+        if (active.length > MAX_PER_SECTION) {
+          html += `<div class="disr-more">+ ${active.length - MAX_PER_SECTION} autre${active.length - MAX_PER_SECTION > 1 ? 's' : ''}</div>`;
+        }
       }
       if (upcoming.length) {
         html += `<div class="disr-section-label">Prévus dans les 15 jours</div>`;
-        html += upcoming.map(renderRow).join('');
+        html += upcoming.slice(0, MAX_PER_SECTION).map(renderRow).join('');
+        if (upcoming.length > MAX_PER_SECTION) {
+          html += `<div class="disr-more">+ ${upcoming.length - MAX_PER_SECTION} autre${upcoming.length - MAX_PER_SECTION > 1 ? 's' : ''}</div>`;
+        }
       }
       this.setBody(html);
 

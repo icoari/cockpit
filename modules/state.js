@@ -58,7 +58,7 @@ const DEFAULT_SETTINGS = {
   encombrants: {
     pattern: 'monthly-2nd-tuesday',
     extraDates: [],
-    address: 'Résidence le Castelet, Conflans-Sainte-Honorine',
+    address: 'Conflans-Sainte-Honorine',
   },
   collectes: {
     // Each: enabled (bool), pattern (string), label (string)

@@ -527,6 +527,17 @@ body.theme-light .last-train-row { background: rgba(20, 20, 30, 0.025); }
    ============================================================ */
 .card--hidden { display: none; }
 
+/* Compact mode: only the head row, no body — saves space when there's nothing to show */
+.card--compact {
+  padding: 14px 18px;
+}
+.card--compact .card__head {
+  margin-bottom: 0;
+}
+.card--compact [data-body] {
+  display: none;
+}
+
 .disr-section-label {
   font-size: 10px;
   font-weight: 600;

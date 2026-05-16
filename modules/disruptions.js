@@ -192,21 +192,21 @@ export class DisruptionsWidget {
   async refresh() {
     const settings = getSettings();
     if (!settings.idfm.apiKey) {
-      this.container.classList.add('card--hidden');
+      this.container.classList.add('card--compact');
+      this.setBody('');
+      this.setSubtitle('clé IDFM manquante');
       return;
     }
 
     try {
       const all = await loadAll(settings.idfm.apiKey);
-      // Filter to relevant + active or upcoming-15d, dedupe by id, sort
+      // Filter to relevant + active or upcoming-15d, dedupe by content
       const seenKey = new Set();
       const relevant = all
         .filter(d => d.status !== 'past')
         .filter(d => isActive(d) || isUpcomingIn15Days(d))
         .filter(d => isRelevant(d.line, d.text))
         .filter(d => {
-          // Dedup by (line + first 80 chars of text) — IDFM frequently returns the
-          // same disruption multiple times with different application_periods.
           const key = `${d.line}::${(d.text || '').slice(0, 80).toLowerCase()}`;
           if (seenKey.has(key)) return false;
           seenKey.add(key);
@@ -214,11 +214,14 @@ export class DisruptionsWidget {
         });
 
       if (relevant.length === 0) {
-        // Hide the card entirely when nothing affects the user
-        this.container.classList.add('card--hidden');
+        // Compact mode: show only the header line — never disappear entirely
+        this.container.classList.add('card--compact');
+        this.setBody('');
+        const hh = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        this.setSubtitle(`trafic normal · J + RER A · vérifié à ${hh}`);
         return;
       }
-      this.container.classList.remove('card--hidden');
+      this.container.classList.remove('card--compact');
 
       const active = relevant.filter(d => isActive(d));
       const upcoming = relevant.filter(d => !isActive(d) && isUpcomingIn15Days(d))
@@ -250,7 +253,9 @@ export class DisruptionsWidget {
       if (upcoming.length) parts.push(`${upcoming.length} à venir`);
       this.setSubtitle(parts.join(' · ') || 'aucune');
     } catch (e) {
-      this.container.classList.add('card--hidden');
+      this.container.classList.add('card--compact');
+      this.setBody('');
+      this.setSubtitle('chargement indisponible');
     }
   }
 }

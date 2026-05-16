@@ -69,7 +69,7 @@ async function fetchChannel(channel) {
 }
 
 async function fetchAll(searchQuery) {
-  const cacheKey = searchQuery ? `yt_search_${searchQuery}` : 'yt_all';
+  const cacheKey = searchQuery ? `yt_search_v2_${searchQuery}` : 'yt_all_v2';
   const cached = cacheGet(cacheKey, CACHE_TTL);
   if (cached) return cached.map(it => ({ ...it, date: new Date(it.date) }));
 
@@ -162,7 +162,7 @@ export class YoutubeWidget {
       if (e.target.closest('[data-action="refresh"]')) {
         e.stopPropagation();
         haptic(6);
-        cacheBust('yt_all');
+        cacheBust('yt_all_v2');
         if (this.searchInput) cacheBust(`yt_search_${this.searchInput}`);
         this.refresh();
         return;

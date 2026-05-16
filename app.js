@@ -6,6 +6,7 @@ import { TrainsWidget } from './modules/trains.js';
 import { LastTrainWidget } from './modules/lastTrain.js';
 import { FeedWidget } from './modules/aiwatch.js';
 import { YoutubeWidget } from './modules/youtube.js';
+import { HackerNewsWidget } from './modules/hackernews.js';
 import { GasWidget } from './modules/gas.js';
 import { WeatherCard } from './modules/weatherCard.js';
 import { AirQualityWidget } from './modules/airquality.js';
@@ -94,6 +95,7 @@ function mountWidgets() {
   widgets.trainsRetour = new TrainsWidget(document.querySelector('[data-widget="trains-retour"]'), 'retour');
   widgets.lastTrain    = new LastTrainWidget(document.querySelector('[data-widget="last-train"]'));
   widgets.youtube      = new YoutubeWidget(document.querySelector('[data-widget="youtube"]'));
+  widgets.hackernews   = new HackerNewsWidget(document.querySelector('[data-widget="hackernews"]'));
   widgets.techwatch    = new FeedWidget(document.querySelector('[data-widget="techwatch"]'), { category: 'tech', title: 'Veille tech' });
 }
 

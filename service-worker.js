@@ -1,4 +1,4 @@
-const CACHE = 'cockpit-v9';
+const CACHE = 'cockpit-v10';
 const ASSETS = [
   './',
   './index.html',
@@ -20,6 +20,7 @@ const ASSETS = [
   './modules/bins.js',
   './modules/pharmacies.js',
   './modules/youtube.js',
+  './modules/hackernews.js',
   './modules/settings.js',
   './icons/icon.svg',
 ];

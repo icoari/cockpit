@@ -1769,3 +1769,91 @@ body.theme-light .yt-item { background: rgba(20, 20, 30, 0.025); }
   white-space: nowrap;
   max-width: 110px;
 }
+
+/* ============================================================
+   Hacker News
+   ============================================================ */
+.hn-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hn-item {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 12px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--border);
+  color: inherit;
+  transition: background 160ms var(--ease);
+  align-items: center;
+}
+.hn-item:last-child { border-bottom: none; }
+.hn-item:hover { background: rgba(255, 255, 255, 0.025); }
+body.theme-light .hn-item:hover { background: rgba(20, 20, 30, 0.025); }
+.hn-item:active { transform: scale(0.998); }
+.hn-item--read { opacity: 0.5; }
+
+.hn-item__score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-glow);
+  border-radius: 10px;
+  padding: 6px 4px;
+  min-width: 44px;
+}
+
+.hn-item__points {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.hn-item__points-label {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: 0.7;
+  margin-top: 2px;
+}
+
+.hn-item__info { min-width: 0; }
+
+.hn-item__title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.hn-item__meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
+.hn-item__domain {
+  color: var(--text-dim);
+  font-weight: 500;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -492,6 +492,28 @@ body.theme-light .last-train-row { background: rgba(20, 20, 30, 0.025); }
   letter-spacing: 0.02em;
 }
 
+.last-train-row--backup {
+  border-color: rgba(229, 178, 93, 0.25);
+  background: rgba(229, 178, 93, 0.05);
+}
+
+.last-train-row--backup .last-train-row__line {
+  color: var(--warning);
+}
+
+.last-train-row--backup .last-train-row__time {
+  color: var(--warning);
+}
+
+.last-train-extra {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-align: center;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
 /* ============================================================
    AI watch
    ============================================================ */
@@ -943,9 +965,9 @@ body.theme-light .last-train-row { background: rgba(20, 20, 30, 0.025); }
 .tabbar-btn__icon svg { width: 22px; height: 22px; stroke-width: 1.7; }
 
 .tabbar-btn__label {
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   line-height: 1;
 }
 

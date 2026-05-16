@@ -45,7 +45,7 @@ function renderHeader() {
 }
 
 // ---------- Tabs ----------
-const TAB_LABELS = { perso: 'Perso', pro: 'Pro', settings: 'Réglages' };
+const TAB_LABELS = { perso: 'Perso', trains: 'Trains', pro: 'Pro', settings: 'Réglages' };
 
 function setActiveTab(name) {
   document.querySelectorAll('.tabbar-btn').forEach(b => {
@@ -151,9 +151,8 @@ setInterval(() => {
   if (!document.hidden) {
     try { widgets.trainsAller?.refresh(); } catch {}
     try { widgets.trainsRetour?.refresh(); } catch {}
-    try { widgets.lastTrain?.refresh(); } catch {}
   }
-}, 90 * 1000);
+}, 60 * 1000);
 
 // Re-apply theme when system color scheme changes (auto mode)
 window.matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', () => {

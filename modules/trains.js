@@ -310,9 +310,9 @@ export class TrainsWidget {
     const backup = conflansBound.filter(d => jBranch(d.destination) === 'sh').slice(0, 2);
 
     let html = `<div class="train-section-label">Vers Conflans Fin d'Oise</div>`;
-    html += renderList(primary, { markLast: true });
+    html += renderList(primary, { markLast: false });
     if (backup.length > 0) {
-      html += `<div class="train-section-label train-section-label--backup">Backup — via Conflans-Sainte-Honorine (puis 20 min à pied)</div>`;
+      html += `<div class="train-section-label train-section-label--backup">Vers Conflans-Sainte-Honorine <small style="text-transform:none;letter-spacing:normal;font-weight:400;opacity:0.8">(puis 20 min à pied)</small></div>`;
       html += renderList(backup);
     }
     this.setBody(html, this.buildSummary(primary.length ? primary : backup));

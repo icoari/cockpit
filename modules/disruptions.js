@@ -100,8 +100,13 @@ function fmtPeriod(p) {
 async function fetchLineDisruptions(apiKey, line) {
   const url = `https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia/lines/${line.id}/disruptions?count=30`;
   const resp = await fetchWithTimeout(url, { headers: { 'apikey': apiKey } }, 9000);
-  if (!resp.ok) return [];
+  console.log(`[Bob/disruptions] ${line.code} fetch → HTTP ${resp.status}`);
+  if (!resp.ok) {
+    console.warn(`[Bob/disruptions] ${line.code} non-OK response`, await resp.text().catch(() => ''));
+    return [];
+  }
   const data = await resp.json();
+  console.log(`[Bob/disruptions] ${line.code} disruptions in payload: ${(data.disruptions || []).length}`);
   return (data.disruptions || []).map(d => ({
     id: d.id,
     line: line.code,
@@ -147,6 +152,8 @@ function renderRow(d) {
 
 export class DisruptionsWidget {
   constructor(container) {
+    console.log('[Bob/disruptions] widget mounting', !!container);
+    if (!container) return;
     this.container = container;
     this.container.classList.add('card');
     this.render();
@@ -192,15 +199,14 @@ export class DisruptionsWidget {
   async refresh() {
     const settings = getSettings();
     if (!settings.idfm.apiKey) {
-      this.container.classList.add('card--compact');
-      this.setBody('');
-      this.setSubtitle('clé IDFM manquante');
+      console.log('[Bob/disruptions] no IDFM key — widget hidden');
+      this.container.classList.add('card--hidden');
       return;
     }
 
     try {
       const all = await loadAll(settings.idfm.apiKey);
-      // Filter to relevant + active or upcoming-15d, dedupe by content
+      console.log(`[Bob/disruptions] raw count: ${all.length}`);
       const seenKey = new Set();
       const relevant = all
         .filter(d => d.status !== 'past')
@@ -212,15 +218,14 @@ export class DisruptionsWidget {
           seenKey.add(key);
           return true;
         });
+      console.log(`[Bob/disruptions] relevant for commute: ${relevant.length}`);
 
       if (relevant.length === 0) {
-        // Compact mode: show only the header line — never disappear entirely
-        this.container.classList.add('card--compact');
-        this.setBody('');
-        const hh = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-        this.setSubtitle(`trafic normal · J + RER A · vérifié à ${hh}`);
+        console.log('[Bob/disruptions] no relevant — hiding card');
+        this.container.classList.add('card--hidden');
         return;
       }
+      this.container.classList.remove('card--hidden');
       this.container.classList.remove('card--compact');
 
       const active = relevant.filter(d => isActive(d));
@@ -253,9 +258,8 @@ export class DisruptionsWidget {
       if (upcoming.length) parts.push(`${upcoming.length} à venir`);
       this.setSubtitle(parts.join(' · ') || 'aucune');
     } catch (e) {
-      this.container.classList.add('card--compact');
-      this.setBody('');
-      this.setSubtitle('chargement indisponible');
+      console.error('[Bob/disruptions] fetch error:', e);
+      this.container.classList.add('card--hidden');
     }
   }
 }

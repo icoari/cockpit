@@ -213,27 +213,78 @@ body {
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   position: relative;
+  transition: padding 220ms var(--ease);
+}
+
+.card--compact {
+  padding: 14px 18px;
+  cursor: pointer;
+}
+
+.card--compact .card__body {
+  display: none;
+}
+
+.card--compact .card__head {
+  margin-bottom: 0;
 }
 
 .card__head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   margin-bottom: 14px;
+  min-height: 32px;
+}
+
+.card__head-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
 }
 
 .card__title {
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-faint);
 }
 
+.card__subtitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card--compact .card__subtitle {
+  color: var(--text);
+}
+
+.card__chevron {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  color: var(--text-faint);
+  transition: transform 240ms var(--ease);
+}
+
+.card__chevron svg { width: 100%; height: 100%; }
+
+.card:not(.card--compact) .card__chevron {
+  transform: rotate(180deg);
+}
+
 .card__actions {
-  margin-left: auto;
   display: flex;
   gap: 6px;
+  align-items: center;
 }
 
 .card__action {
@@ -389,6 +440,20 @@ body {
 
 .train-row__status--late { background: var(--warning-soft); color: var(--warning); }
 .train-row__status--cancel { background: var(--danger-soft); color: var(--danger); }
+
+.train-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 12px 0 8px;
+  padding-left: 2px;
+}
+
+.train-section-label--backup {
+  color: var(--warning);
+}
 
 .train-disruption {
   font-size: 12px;
@@ -1038,3 +1103,342 @@ body {
 }
 
 .crud-item__action:hover { color: var(--danger); }
+
+/* ---------- Gas stations ---------- */
+.fuel-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  margin-bottom: 12px;
+  scrollbar-width: none;
+}
+.fuel-tabs::-webkit-scrollbar { display: none; }
+
+.fuel-tab {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border);
+  color: var(--text-faint);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 160ms var(--ease);
+}
+
+.fuel-tab--active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent-glow);
+}
+
+.gas-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gas-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 160ms var(--ease);
+}
+
+.gas-row:hover {
+  background: var(--surface-hover);
+}
+
+.gas-row__price {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.gas-row__price small {
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--text-faint);
+  margin-left: 1px;
+  letter-spacing: 0;
+}
+
+.gas-row__info { min-width: 0; }
+
+.gas-row__name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gas-row__sub {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+.gas-row__badge {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.gas-foot {
+  font-size: 10px;
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+  margin-top: 10px;
+  text-align: center;
+}
+
+/* ---------- Weather card ---------- */
+.weather-current {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.weather-current__icon {
+  width: 42px;
+  height: 42px;
+  color: var(--accent);
+}
+.weather-current__icon svg { width: 100%; height: 100%; }
+
+.weather-current__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.weather-current__temp {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.weather-current__label {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.weather-current__stats {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-faint);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-current__stats strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.weather-alert {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-glow);
+  padding: 8px 12px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.weather-sparkline {
+  width: 100%;
+  height: 70px;
+  margin: 8px 0 12px;
+  display: block;
+}
+
+.weather-days {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.weather-day {
+  display: grid;
+  grid-template-columns: 24px 1fr 50px auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.weather-day__icon {
+  width: 24px;
+  height: 24px;
+  color: var(--text-dim);
+  display: inline-flex;
+}
+.weather-day__icon svg { width: 100%; height: 100%; }
+
+.weather-day__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  text-transform: lowercase;
+}
+.weather-day__label::first-letter { text-transform: uppercase; }
+
+.weather-day__rain {
+  font-size: 11px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.weather-day__range {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.weather-day__range strong { color: var(--text); font-weight: 600; }
+.weather-day__range span  { color: var(--text-faint); font-weight: 400; }
+
+/* ---------- Air quality ---------- */
+.aqi-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.aqi-circle {
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2.5px solid var(--text-faint);
+  flex-shrink: 0;
+}
+
+.aqi-circle__value {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.aqi-circle__label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+.aqi--good  { border-color: #5EC07A; color: #5EC07A; }
+.aqi--ok    { border-color: var(--accent); color: var(--accent); }
+.aqi--meh   { border-color: var(--warning); color: var(--warning); }
+.aqi--bad   { border-color: var(--danger); color: var(--danger); }
+.aqi--worst { border-color: #9B3A2C; color: #9B3A2C; }
+
+.aqi-info { flex: 1; min-width: 0; }
+
+.aqi-info__verdict {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+}
+
+.aqi-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 14px;
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.aqi-stats strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.pollen-section {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.pollen-section__title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+}
+
+.pollen-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pollen-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+}
+
+.pollen-item__level {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+.pollen--low       { color: var(--text); }
+.pollen--low .pollen-item__level       { color: var(--accent); }
+.pollen--med .pollen-item__level       { color: var(--warning); }
+.pollen--high .pollen-item__level      { color: var(--danger); }
+.pollen--very-high .pollen-item__level { color: var(--danger); font-weight: 700; }
+.pollen--high       { border-color: rgba(229, 178, 93, 0.3); }
+.pollen--very-high  { border-color: rgba(226, 109, 92, 0.4); background: var(--danger-soft); }

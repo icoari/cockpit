@@ -1,4 +1,4 @@
-const CACHE = 'cockpit-v1';
+const CACHE = 'cockpit-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -8,21 +8,19 @@ const ASSETS = [
   './modules/icons.js',
   './modules/util.js',
   './modules/state.js',
+  './modules/geolocation.js',
   './modules/weather.js',
+  './modules/weatherCard.js',
+  './modules/airquality.js',
+  './modules/gas.js',
   './modules/trains.js',
   './modules/aiwatch.js',
-  './modules/capture.js',
-  './modules/todos.js',
-  './modules/habits.js',
-  './modules/links.js',
   './modules/settings.js',
   './icons/icon.svg',
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())
-  );
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -36,19 +34,18 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
-
   const url = new URL(req.url);
 
-  // Never cache live API calls
+  // Never cache live API responses
   if (url.hostname.includes('open-meteo.com')
    || url.hostname.includes('iledefrance-mobilites.fr')
    || url.hostname.includes('hn.algolia.com')
-   || url.hostname.includes('rss2json.com')) {
+   || url.hostname.includes('rss2json.com')
+   || url.hostname.includes('data.economie.gouv.fr')) {
     e.respondWith(fetch(req).catch(() => caches.match(req)));
     return;
   }
 
-  // Cache-first for our own assets, fall back to network
   e.respondWith(
     caches.match(req).then(cached => {
       const fetchPromise = fetch(req).then(resp => {

@@ -1,65 +1,59 @@
 import { safeJSON, uid, todayKey } from './util.js';
 
-const KEY = 'cockpit-v1';
+const KEY = 'cockpit-v2';
 
 const DEFAULT_SETTINGS = {
   idfm: {
     apiKey: '',
+    // Verified via IDFM open data and live API (2026-05-16)
     stops: {
-      conflansFinDOise: 'STIF:StopArea:SP:43135:',   // Transilien J
-      conflansSainteHonorine: 'STIF:StopArea:SP:43169:', // RER A (à confirmer)
-      saintLazare: 'STIF:StopArea:SP:71359:',         // Transilien J terminus
-      chatelet: 'STIF:StopArea:SP:474148:',           // RER A central Paris (à confirmer)
+      conflansFinDOise:        'STIF:StopArea:SP:43114:',  // J + RER A
+      conflansSainteHonorine:  'STIF:StopArea:SP:47447:',  // J only (backup)
+      saintLazare:             'STIF:StopArea:SP:58566:',
+      chatelet:                'STIF:StopArea:SP:45102:',
+      auber:                   'STIF:StopArea:SP:45873:',
     },
-    destinations: {
-      // Identification of trains going "toward Paris" or "toward Conflans"
-      towardParis: ['Paris Saint-Lazare', 'Saint-Lazare', 'Paris-St-Lazare', 'Paris', 'Boissy-Saint-Léger', 'Marne-la-Vallée', 'Marne la Vallée'],
-      towardConflans: ['Conflans', 'Mantes-la-Jolie', 'Mantes', 'Gisors', 'Vernon', 'Cergy', 'Poissy', 'Saint-Germain'],
+    // Line IDs (STIF refs)
+    lines: {
+      transilienJ: 'STIF:Line::C01739:',
+      rerA:        'STIF:Line::C01742:',
     },
+    // Heuristics: destinations matching these go *toward Conflans / west* on RER A
+    rerWestDestinations: ['Cergy', 'Poissy'],
+    // RER A trains stopping at Conflans Fin d'Oise: only those bound for Cergy le Haut
+    rerToConflans:       ['Cergy le Haut', 'Cergy'],
   },
   location: {
     lat: 49.005,
     lon: 2.099,
     name: 'Conflans',
   },
+  gas: {
+    radiusKm: 8,
+    fuel: 'gazole',   // gazole | sp95 | sp98 | e85 | e10 | gplc
+  },
   aiSources: [
-    { id: 'hn',         name: 'Hacker News',     enabled: true,  type: 'hn-algolia' },
-    { id: 'anthropic',  name: 'Anthropic',       enabled: true,  type: 'rss', url: 'https://www.anthropic.com/news/rss.xml' },
-    { id: 'openai',     name: 'OpenAI',          enabled: true,  type: 'rss', url: 'https://openai.com/news/rss.xml' },
-    { id: 'deepmind',   name: 'Google DeepMind', enabled: true,  type: 'rss', url: 'https://deepmind.google/blog/rss.xml' },
-    { id: 'hf',         name: 'Hugging Face',    enabled: true,  type: 'rss', url: 'https://huggingface.co/blog/feed.xml' },
-    { id: 'arxiv',      name: 'arXiv cs.AI',     enabled: false, type: 'rss', url: 'http://export.arxiv.org/rss/cs.AI' },
-    { id: 'mistral',    name: 'Mistral',         enabled: false, type: 'rss', url: 'https://mistral.ai/news/rss.xml' },
+    { id: 'hn',          name: 'Hacker News',     enabled: true,  type: 'hn-algolia' },
+    { id: 'openai',      name: 'OpenAI',          enabled: true,  type: 'rss', url: 'https://openai.com/news/rss.xml' },
+    { id: 'deepmind',    name: 'Google DeepMind', enabled: true,  type: 'rss', url: 'https://deepmind.google/blog/rss.xml' },
+    { id: 'hf',          name: 'Hugging Face',    enabled: true,  type: 'rss', url: 'https://huggingface.co/blog/feed.xml' },
+    { id: 'google-ai',   name: 'Google AI',       enabled: true,  type: 'rss', url: 'https://blog.google/technology/ai/rss/' },
+    { id: 'lesswrong',   name: 'LessWrong',       enabled: false, type: 'rss', url: 'https://www.lesswrong.com/feed.xml' },
+    { id: 'simonw',      name: 'Simon Willison',  enabled: true,  type: 'rss', url: 'https://simonwillison.net/atom/everything/' },
+    { id: 'techcrunch',  name: 'TechCrunch AI',   enabled: false, type: 'rss', url: 'https://techcrunch.com/category/artificial-intelligence/feed/' },
+    { id: 'theverge',    name: 'The Verge',       enabled: false, type: 'rss', url: 'https://www.theverge.com/rss/index.xml' },
   ],
-  links: [
-    { id: uid(), label: 'Azure DevOps',  url: 'https://dev.azure.com/' },
-    { id: uid(), label: 'Slack',         url: 'https://app.slack.com/' },
-    { id: uid(), label: 'Outlook',       url: 'https://outlook.office.com/' },
-    { id: uid(), label: 'Younited',      url: 'https://www.younited-credit.fr/' },
-    { id: uid(), label: 'GitHub',        url: 'https://github.com/' },
-    { id: uid(), label: 'ChatGPT',       url: 'https://chat.openai.com/' },
-  ],
-  habits: [
-    { id: uid(), name: 'Boire 2L d\'eau' },
-    { id: uid(), name: 'Marcher 30 min' },
-    { id: uid(), name: 'Lire' },
-    { id: uid(), name: 'Pas d\'écran après 22h' },
-  ],
-  activeTab: 'pro',
+  activeTab: 'perso',
 };
 
 const DEFAULT_STATE = {
-  version: 1,
+  version: 2,
   settings: DEFAULT_SETTINGS,
-  captures: [],       // [{ id, text, tags: [], date }]
-  todos: [],          // [{ id, text, done, createdAt, completedAt }]
-  habits: {},         // { habitId: { 'YYYY-MM-DD': true } }
-  aiRead: {},         // { itemUrl: true }
-  cache: {
-    weather: null,
-    trains: {},
-    aiwatch: null,
-  },
+  captures: [],
+  todos: [],
+  habits: {},
+  aiRead: {},
+  cache: {},
 };
 
 let state = load();
@@ -69,7 +63,6 @@ function load() {
   if (!raw) return structuredClone(DEFAULT_STATE);
   const parsed = safeJSON(raw, null);
   if (!parsed) return structuredClone(DEFAULT_STATE);
-  // Shallow merge with defaults so new fields appear after updates
   return mergeDeep(structuredClone(DEFAULT_STATE), parsed);
 }
 
@@ -84,20 +77,12 @@ function mergeDeep(target, source) {
   return target;
 }
 
-export function getState() {
-  return state;
-}
+export function getState() { return state; }
+export function getSettings() { return state.settings; }
 
 export function save() {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(state));
-  } catch (e) {
-    console.error('Storage failed', e);
-  }
-}
-
-export function getSettings() {
-  return state.settings;
+  try { localStorage.setItem(KEY, JSON.stringify(state)); }
+  catch (e) { console.error('Storage failed', e); }
 }
 
 export function updateSettings(patch) {
@@ -109,14 +94,10 @@ export function updateSettings(patch) {
 export function addCapture(text) {
   const tags = [...text.matchAll(/#([\w\-éèêàâôùç]+)/gi)].map(m => m[1].toLowerCase());
   state.captures.unshift({
-    id: uid(),
-    text: text.trim(),
-    tags,
-    date: new Date().toISOString(),
+    id: uid(), text: text.trim(), tags, date: new Date().toISOString(),
   });
   save();
 }
-
 export function removeCapture(id) {
   state.captures = state.captures.filter(c => c.id !== id);
   save();
@@ -125,15 +106,11 @@ export function removeCapture(id) {
 // Todos
 export function addTodo(text) {
   state.todos.unshift({
-    id: uid(),
-    text: text.trim(),
-    done: false,
-    createdAt: new Date().toISOString(),
-    completedAt: null,
+    id: uid(), text: text.trim(), done: false,
+    createdAt: new Date().toISOString(), completedAt: null,
   });
   save();
 }
-
 export function toggleTodo(id) {
   const t = state.todos.find(x => x.id === id);
   if (!t) return;
@@ -141,77 +118,24 @@ export function toggleTodo(id) {
   t.completedAt = t.done ? new Date().toISOString() : null;
   save();
 }
-
 export function removeTodo(id) {
   state.todos = state.todos.filter(t => t.id !== id);
   save();
 }
 
-// Habits
-export function toggleHabit(habitId, dayKey = todayKey()) {
-  if (!state.habits[habitId]) state.habits[habitId] = {};
-  if (state.habits[habitId][dayKey]) {
-    delete state.habits[habitId][dayKey];
-  } else {
-    state.habits[habitId][dayKey] = true;
-  }
-  save();
-}
+// AI read
+export function markAiRead(url) { state.aiRead[url] = true; save(); }
+export function isAiRead(url) { return !!state.aiRead[url]; }
 
-export function getHabitLog(habitId) {
-  return state.habits[habitId] || {};
-}
-
-// AI Watch — mark read
-export function markAiRead(url) {
-  state.aiRead[url] = true;
-  save();
-}
-
-export function isAiRead(url) {
-  return !!state.aiRead[url];
-}
-
-// CRUD on settings collections
-export function addLink(label, url) {
-  state.settings.links.push({ id: uid(), label: label.trim(), url: url.trim() });
-  save();
-}
-
-export function removeLink(id) {
-  state.settings.links = state.settings.links.filter(l => l.id !== id);
-  save();
-}
-
-export function addHabit(name) {
-  state.settings.habits.push({ id: uid(), name: name.trim() });
-  save();
-}
-
-export function removeHabit(id) {
-  state.settings.habits = state.settings.habits.filter(h => h.id !== id);
-  delete state.habits[id];
-  save();
-}
-
+// AI sources CRUD
 export function addAiSource(name, url) {
-  state.settings.aiSources.push({
-    id: uid(),
-    name: name.trim(),
-    type: 'rss',
-    url: url.trim(),
-    enabled: true,
-  });
+  state.settings.aiSources.push({ id: uid(), name: name.trim(), type: 'rss', url: url.trim(), enabled: true });
   save();
 }
-
 export function toggleAiSource(id) {
   const s = state.settings.aiSources.find(x => x.id === id);
-  if (!s) return;
-  s.enabled = !s.enabled;
-  save();
+  if (s) { s.enabled = !s.enabled; save(); }
 }
-
 export function removeAiSource(id) {
   state.settings.aiSources = state.settings.aiSources.filter(s => s.id !== id);
   save();
@@ -220,28 +144,27 @@ export function removeAiSource(id) {
 // Cache helpers
 export function cacheGet(key, ttlMs) {
   const c = state.cache[key];
-  if (!c || !c.ts) return null;
+  if (!c || !c.ts || c.data == null) return null;
   if (Date.now() - c.ts > ttlMs) return null;
   return c.data;
 }
-
 export function cacheSet(key, data) {
   state.cache[key] = { ts: Date.now(), data };
   save();
 }
-
-// Export / Import (settings.js will use these)
-export function exportData() {
-  return JSON.stringify(state, null, 2);
+export function cacheBust(key) {
+  delete state.cache[key];
+  save();
 }
 
+// Export / Import / Reset
+export function exportData() { return JSON.stringify(state, null, 2); }
 export function importData(json) {
   const parsed = safeJSON(json, null);
   if (!parsed || typeof parsed !== 'object') throw new Error('JSON invalide');
   state = mergeDeep(structuredClone(DEFAULT_STATE), parsed);
   save();
 }
-
 export function resetAll() {
   state = structuredClone(DEFAULT_STATE);
   save();

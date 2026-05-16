@@ -4,10 +4,9 @@ import { getSettings, updateSettings } from './modules/state.js';
 import { renderHeaderWeather } from './modules/weather.js';
 import { TrainsWidget } from './modules/trains.js';
 import { AiWatchWidget } from './modules/aiwatch.js';
-import { LinksWidget } from './modules/links.js';
-import { CaptureWidget } from './modules/capture.js';
-import { TodosWidget } from './modules/todos.js';
-import { HabitsWidget } from './modules/habits.js';
+import { GasWidget } from './modules/gas.js';
+import { WeatherCard } from './modules/weatherCard.js';
+import { AirQualityWidget } from './modules/airquality.js';
 import { SettingsPanel } from './modules/settings.js';
 
 // ---------- Header ----------
@@ -35,51 +34,63 @@ function setActiveTab(name) {
 }
 
 function initTabs() {
-  const tabs = document.querySelectorAll('.tab');
-  tabs.forEach(t => {
+  document.querySelectorAll('.tab').forEach(t => {
     t.addEventListener('click', () => {
       haptic(4);
       setActiveTab(t.dataset.tab);
     });
   });
+  const saved = getSettings().activeTab || 'perso';
+  setActiveTab(saved);
+}
 
-  // Default tab: pro if before 14h or no preference
-  const hour = new Date().getHours();
-  const saved = getSettings().activeTab;
-  const defaultTab = (hour < 14 || hour >= 20) ? 'pro' : (saved || 'perso');
-  setActiveTab(saved || defaultTab);
+// ---------- Collapsible cards ----------
+function initCollapsibleCards() {
+  // All cards start collapsed (compact)
+  document.querySelectorAll('.widget.card').forEach(card => {
+    card.classList.add('card--compact');
+  });
+
+  // Tap a compact card header → expand
+  document.body.addEventListener('click', (e) => {
+    const toggle = e.target.closest('[data-card-toggle]');
+    if (toggle) {
+      const card = toggle.closest('.card');
+      if (!card) return;
+      // If clicking on an action button inside head, don't toggle
+      if (e.target.closest('[data-action]')) return;
+      haptic(4);
+      card.classList.toggle('card--compact');
+      return;
+    }
+  });
+
+  // Tap outside any expanded card → collapse it
+  document.body.addEventListener('click', (e) => {
+    document.querySelectorAll('.widget.card:not(.card--compact)').forEach(card => {
+      if (card.contains(e.target)) return;
+      // Don't collapse if click is on modal or topbar
+      if (e.target.closest('.modal-backdrop')) return;
+      if (e.target.closest('.topbar')) return;
+      if (e.target.closest('.tabs')) return;
+      card.classList.add('card--compact');
+    });
+  });
 }
 
 // ---------- Widgets ----------
 const widgets = {};
 
 function mountWidgets() {
-  // Pro pane
-  widgets.trainsAller = new TrainsWidget(
-    document.querySelector('[data-widget="trains-aller"]'),
-    'aller'
-  );
-  widgets.trainsRetour = new TrainsWidget(
-    document.querySelector('[data-widget="trains-retour"]'),
-    'retour'
-  );
-  widgets.aiwatch = new AiWatchWidget(
-    document.querySelector('[data-widget="aiwatch"]')
-  );
-  widgets.links = new LinksWidget(
-    document.querySelector('[data-widget="links"]')
-  );
+  // Perso (life utility) — order matters: most-used first
+  widgets.gas         = new GasWidget(document.querySelector('[data-widget="gas"]'));
+  widgets.weatherCard = new WeatherCard(document.querySelector('[data-widget="weatherCard"]'));
+  widgets.air         = new AirQualityWidget(document.querySelector('[data-widget="air"]'));
 
-  // Perso pane
-  widgets.capture = new CaptureWidget(
-    document.querySelector('[data-widget="capture"]')
-  );
-  widgets.todos = new TodosWidget(
-    document.querySelector('[data-widget="todos"]')
-  );
-  widgets.habits = new HabitsWidget(
-    document.querySelector('[data-widget="habits"]')
-  );
+  // Pro
+  widgets.trainsAller  = new TrainsWidget(document.querySelector('[data-widget="trains-aller"]'), 'aller');
+  widgets.trainsRetour = new TrainsWidget(document.querySelector('[data-widget="trains-retour"]'), 'retour');
+  widgets.aiwatch      = new AiWatchWidget(document.querySelector('[data-widget="aiwatch"]'));
 }
 
 // ---------- Settings ----------
@@ -87,13 +98,11 @@ function initSettings() {
   const panel = new SettingsPanel(
     document.getElementById('settingsBody'),
     () => {
-      // re-render widgets that depend on settings
-      try { widgets.links?.refresh(); } catch {}
-      try { widgets.trainsAller?.refresh(); } catch {}
-      try { widgets.trainsRetour?.refresh(); } catch {}
-      try { widgets.aiwatch?.refresh(); } catch {}
-      try { widgets.habits?.render(); } catch {}
-      // also refresh weather (location might've changed)
+      Object.values(widgets).forEach(w => {
+        if (typeof w.refresh === 'function') {
+          try { w.refresh(); } catch {}
+        }
+      });
       renderHeader();
     }
   );
@@ -104,11 +113,9 @@ function initSettings() {
   });
   document.getElementById('settingsClose').addEventListener('click', () => panel.close());
   document.getElementById('settingsBackdrop').addEventListener('click', (e) => {
-    // Close on backdrop click (not on the modal itself)
     if (e.target === e.currentTarget) panel.close();
   });
 
-  // Allow widget cards to open settings (via [data-open-settings])
   document.body.addEventListener('click', (e) => {
     if (e.target.closest('[data-open-settings]')) {
       e.preventDefault();
@@ -120,26 +127,29 @@ function initSettings() {
 // ---------- Lifecycle ----------
 function refreshLiveData() {
   renderHeader();
-  try { widgets.trainsAller?.refresh(); } catch {}
-  try { widgets.trainsRetour?.refresh(); } catch {}
+  Object.values(widgets).forEach(w => {
+    if (typeof w.refresh === 'function') {
+      try { w.refresh(); } catch {}
+    }
+  });
 }
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) refreshLiveData();
 });
-
 window.addEventListener('focus', refreshLiveData);
 
-// Periodic train refresh (every 2 min while open)
+// Trains auto-refresh every 90s while open
 setInterval(() => {
   if (!document.hidden) {
     try { widgets.trainsAller?.refresh(); } catch {}
     try { widgets.trainsRetour?.refresh(); } catch {}
   }
-}, 120 * 1000);
+}, 90 * 1000);
 
 // ---------- Init ----------
 renderHeader();
 mountWidgets();
 initTabs();
+initCollapsibleCards();
 initSettings();

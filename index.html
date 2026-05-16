@@ -47,22 +47,21 @@
   </header>
 
   <nav class="tabs">
-    <button class="tab" data-tab="pro" type="button">Pro</button>
     <button class="tab" data-tab="perso" type="button">Perso</button>
+    <button class="tab" data-tab="pro" type="button">Pro</button>
     <span class="tabs__indicator" aria-hidden="true"></span>
   </nav>
 
   <main class="app">
-    <section class="pane" data-pane="pro">
+    <section class="pane" data-pane="perso">
+      <div class="widget" data-widget="gas"></div>
+      <div class="widget" data-widget="weatherCard"></div>
+      <div class="widget" data-widget="air"></div>
+    </section>
+    <section class="pane" data-pane="pro" hidden>
       <div class="widget" data-widget="trains-aller"></div>
       <div class="widget" data-widget="trains-retour"></div>
       <div class="widget" data-widget="aiwatch"></div>
-      <div class="widget" data-widget="links"></div>
-    </section>
-    <section class="pane" data-pane="perso" hidden>
-      <div class="widget" data-widget="capture"></div>
-      <div class="widget" data-widget="todos"></div>
-      <div class="widget" data-widget="habits"></div>
     </section>
   </main>
 

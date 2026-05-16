@@ -1,12 +1,13 @@
-import { getSettings, cacheGet, cacheSet, markAiRead, isAiRead } from './state.js';
+import { getSettings, cacheGet, cacheSet, cacheBust, markAiRead, isAiRead } from './state.js';
 import { ICONS } from './icons.js';
 import { escapeHTML, fetchWithTimeout, timeAgo, haptic } from './util.js';
 
-const CACHE_TTL = 10 * 60 * 1000; // 10 min
+const CACHE_TTL = 10 * 60 * 1000;
 const HN_API = 'https://hn.algolia.com/api/v1/search_by_date';
 const RSS2JSON = 'https://api.rss2json.com/v1/api.json';
 
-const KEYWORDS = ['AI', 'LLM', 'GPT', 'Claude', 'Anthropic', 'OpenAI', 'machine learning', 'deep learning', 'AGI', 'transformer', 'neural'];
+// Broad AI-related search for HN
+const HN_QUERIES = ['AI OR LLM OR GPT OR Claude OR Anthropic OR OpenAI'];
 
 function stripHTML(html) {
   if (!html) return '';
@@ -14,8 +15,9 @@ function stripHTML(html) {
 }
 
 async function fetchHN() {
-  const query = KEYWORDS.slice(0, 5).map(k => `"${k}"`).join(' OR ');
-  const url = `${HN_API}?query=${encodeURIComponent(query)}&tags=story&hitsPerPage=25&numericFilters=points>20`;
+  // Past 7 days, AI-related, popular enough to be relevant (>=5 points)
+  const sevenDaysAgo = Math.floor((Date.now() - 7 * 86400 * 1000) / 1000);
+  const url = `${HN_API}?query=${encodeURIComponent(HN_QUERIES[0])}&tags=story&hitsPerPage=30&numericFilters=created_at_i>${sevenDaysAgo},points>5`;
   const resp = await fetchWithTimeout(url, {}, 7000);
   if (!resp.ok) return [];
   const data = await resp.json();
@@ -31,7 +33,7 @@ async function fetchHN() {
 }
 
 async function fetchRSS(src) {
-  const url = `${RSS2JSON}?rss_url=${encodeURIComponent(src.url)}&count=15`;
+  const url = `${RSS2JSON}?rss_url=${encodeURIComponent(src.url)}`;
   const resp = await fetchWithTimeout(url, {}, 8000);
   if (!resp.ok) return [];
   const data = await resp.json();
@@ -68,16 +70,15 @@ async function fetchAll() {
     return true;
   });
 
+  // Filter out items older than 30 days (defensive against bad pubDates)
+  const cutoff = Date.now() - 30 * 86400 * 1000;
+  items = items.filter(it => it.date.getTime() > cutoff);
+
   // Sort by date desc
   items.sort((a, b) => b.date - a.date);
-
-  // Keep top 60
   items = items.slice(0, 60);
 
-  // Persist with serializable dates
-  const toCache = items.map(it => ({ ...it, date: it.date.toISOString() }));
-  cacheSet('aiwatch', toCache);
-
+  cacheSet('aiwatch', items.map(it => ({ ...it, date: it.date.toISOString() })));
   return items;
 }
 
@@ -101,7 +102,8 @@ export class AiWatchWidget {
     this.container = container;
     this.container.classList.add('card');
     this.items = [];
-    this.filter = null; // sourceId or null
+    this.filter = null;
+    this.lastSummary = '';
     this.render();
     this.attach();
     this.refresh();
@@ -109,31 +111,35 @@ export class AiWatchWidget {
 
   render() {
     this.container.innerHTML = `
-      <div class="card__head">
-        <span class="card__title">Veille IA</span>
+      <div class="card__head" data-card-toggle>
+        <div class="card__head-main">
+          <span class="card__title">Veille IA</span>
+          <span class="card__subtitle"></span>
+        </div>
         <div class="card__actions">
           <button class="card__action" data-action="refresh" type="button" aria-label="Rafraîchir">${ICONS.refresh}</button>
+          <span class="card__chevron">${ICONS.chevronDown}</span>
         </div>
       </div>
-      <div class="ai-filters" data-filters></div>
-      <div data-list><div class="card__loading">Chargement…</div></div>
+      <div class="card__body">
+        <div class="ai-filters" data-filters></div>
+        <div data-list><div class="card__loading">Chargement…</div></div>
+      </div>
     `;
   }
 
   attach() {
     this.container.addEventListener('click', (e) => {
-      const refresh = e.target.closest('[data-action="refresh"]');
-      if (refresh) {
+      if (e.target.closest('[data-action="refresh"]')) {
+        e.stopPropagation();
         haptic(6);
-        e.preventDefault();
-        // bust cache then refresh
-        const settings = getSettings();
-        // we just trigger refresh; cache is TTL-based but we want force
-        this.refresh(true);
+        cacheBust('aiwatch');
+        this.refresh();
         return;
       }
       const chip = e.target.closest('[data-chip]');
       if (chip) {
+        e.stopPropagation();
         haptic(4);
         const v = chip.dataset.chip === '' ? null : chip.dataset.chip;
         this.filter = (this.filter === v) ? null : v;
@@ -143,17 +149,21 @@ export class AiWatchWidget {
       const item = e.target.closest('[data-url]');
       if (item) {
         markAiRead(item.dataset.url);
-        // visually update
         item.classList.add('ai-item--read');
       }
     });
+  }
+
+  setSubtitle(text) {
+    this.lastSummary = text;
+    const el = this.container.querySelector('.card__subtitle');
+    if (el) el.textContent = text;
   }
 
   renderItems() {
     const listEl = this.container.querySelector('[data-list]');
     const filtersEl = this.container.querySelector('[data-filters]');
 
-    // Build filter chips from sources present in items
     const sourceCounts = {};
     for (const it of this.items) {
       sourceCounts[it.sourceId] = (sourceCounts[it.sourceId] || 0) + 1;
@@ -172,20 +182,22 @@ export class AiWatchWidget {
     listEl.innerHTML = `<div class="ai-list">${visible.slice(0, 30).map(renderItem).join('')}</div>`;
   }
 
-  async refresh(force = false) {
+  async refresh() {
     const listEl = this.container.querySelector('[data-list]');
     listEl.innerHTML = '<div class="card__loading">Chargement…</div>';
-
-    if (force) {
-      // simply ignore cache by clearing it
-      cacheSet('aiwatch', null);
-    }
-
+    this.setSubtitle('chargement…');
     try {
       this.items = await fetchAll();
       this.renderItems();
+      if (this.items.length > 0) {
+        const fresh = this.items[0];
+        this.setSubtitle(`${this.items.length} articles · dernier ${timeAgo(fresh.date)}`);
+      } else {
+        this.setSubtitle('aucun article récent');
+      }
     } catch (e) {
       listEl.innerHTML = `<div class="card__error">Impossible de charger la veille (${escapeHTML(e.message || 'erreur')}).</div>`;
+      this.setSubtitle('erreur');
     }
   }
 }

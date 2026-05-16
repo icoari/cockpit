@@ -335,7 +335,7 @@ button {
 
 .train-row {
   display: grid;
-  grid-template-columns: 64px 1fr auto;
+  grid-template-columns: 72px 1fr auto;
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
@@ -343,6 +343,14 @@ button {
   border: 1px solid var(--border);
   border-radius: 14px;
   transition: background 160ms var(--ease);
+}
+
+.train-row__when--now {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
 }
 
 .train-row--last {
@@ -1500,17 +1508,25 @@ body.theme-light .event { background: rgba(20, 20, 30, 0.03); }
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 14px 8px;
+  padding: 12px 8px 14px;
   background: rgba(255, 255, 255, 0.025);
   border: 1px solid var(--border);
   border-radius: 14px;
   text-align: center;
+  position: relative;
 }
 body.theme-light .collecte-col { background: rgba(20, 20, 30, 0.025); }
 
-.collecte-col--accent {
-  background: var(--accent-soft);
-  border-color: var(--accent-glow);
+.collecte-col__dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-bottom: 4px;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.15);
+}
+body.theme-light .collecte-col__dot {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
 }
 
 .collecte-col--disabled .collecte-col__num { color: var(--text-faint); }

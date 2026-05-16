@@ -113,9 +113,9 @@ export class BinsWidget {
     const { collectes } = getSettings();
 
     const types = [
-      { key: 'ordures',     label: 'Ordures ménagères', short: 'Ordures' },
-      { key: 'tri',         label: 'Tri sélectif',      short: 'Tri' },
-      { key: 'encombrants', label: 'Encombrants',       short: 'Encombrants' },
+      { key: 'ordures',     short: 'Ordures',     dot: '#616161' }, // graphite (gray)
+      { key: 'tri',         short: 'Tri',         dot: '#F6BF26' }, // banana (yellow)
+      { key: 'encombrants', short: 'Encombrants', dot: '#F4511E' }, // tangerine (orange)
     ];
 
     const cols = types.map(t => {
@@ -123,6 +123,7 @@ export class BinsWidget {
       if (!date) {
         return `
           <div class="collecte-col collecte-col--disabled">
+            <span class="collecte-col__dot" style="background:${t.dot}"></span>
             <div class="collecte-col__label">${escapeHTML(t.short)}</div>
             <div class="collecte-col__num">—</div>
             <div class="collecte-col__date">non configuré</div>
@@ -132,9 +133,9 @@ export class BinsWidget {
       const days = daysUntil(date);
       const num = days === 0 ? "aujourd'hui" : days === 1 ? 'demain' : `${days}`;
       const unit = days > 1 ? '<small>j</small>' : '';
-      const accent = t.key === 'encombrants' ? 'collecte-col--accent' : '';
       return `
-        <div class="collecte-col ${accent}">
+        <div class="collecte-col">
+          <span class="collecte-col__dot" style="background:${t.dot}"></span>
           <div class="collecte-col__label">${escapeHTML(t.short)}</div>
           <div class="collecte-col__num">${escapeHTML(num)}${unit}</div>
           <div class="collecte-col__date">${escapeHTML(shortDate(date))}</div>

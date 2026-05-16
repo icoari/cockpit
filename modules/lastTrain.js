@@ -6,11 +6,11 @@ import { PARIS_RER_A } from './trains.js';
 
 const CACHE_TTL = 6 * 60 * 60 * 1000; // schedule is mostly static
 
-// Coordinates (lat, lon) for key stations
+// Verified WGS84 coords (converted from IDFM Lambert93 stop_area positions)
 const COORDS = {
-  saintLazare:          { lat: 48.8757, lon: 2.3247 },
-  conflansFinDOise:     { lat: 48.9931, lon: 2.0823 },
-  conflansSainteHonorine: { lat: 49.0021, lon: 2.1037 },
+  saintLazare:            { lat: 48.8757, lon: 2.3247 },
+  conflansFinDOise:       { lat: 48.991156, lon: 2.074643 },
+  conflansSainteHonorine: { lat: 48.996915, lon: 2.098717 },
 };
 
 const LINES = {
@@ -30,20 +30,21 @@ function navitiaDt(d) {
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 }
 
-function tonightCutoff() {
-  // 05:00 tomorrow morning — captures everything before end of night service
+function n152StartTime() {
+  // N152 runs at night. Query from 22:30 today to make sure we hit
+  // tonight's schedule even if we're checking earlier in the day.
   const t = new Date();
-  t.setDate(t.getDate() + 1);
-  t.setHours(5, 0, 0, 0);
+  if (t.getHours() < 22) {
+    t.setHours(22, 30, 0, 0);
+  }
   return t;
 }
 
 async function fetchJourney(apiKey, fromLat, fromLon, toLat, toLon, lineId, opts = {}) {
-  const { count = 1, byArrival = false, datetime } = opts;
+  const { count = 50, datetime } = opts;
   const url = `https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia/journeys`
     + `?from=${fromLon};${fromLat}&to=${toLon};${toLat}`
     + `&datetime=${datetime}`
-    + (byArrival ? '&datetime_represents=arrival' : '')
     + `&allowed_id[]=${encodeURIComponent(lineId)}`
     + `&count=${count}`;
   const resp = await fetchWithTimeout(url, { headers: { 'apikey': apiKey } }, 10000);
@@ -99,7 +100,8 @@ async function loadAll(apiKey) {
     };
   }
 
-  const cutoff = navitiaDt(tonightCutoff());
+  const nowDt = navitiaDt(new Date());
+  const n152Dt = navitiaDt(n152StartTime());
 
   // RER A: from nearest Paris station to Conflans Fin d'Oise
   const pos = await getPosition({ timeout: 4000 });
@@ -111,26 +113,30 @@ async function loadAll(apiKey) {
     if (sorted[0].d < 50) rerStation = sorted[0];
   }
 
-  const [lastJFdo, lastJSh, lastRer, nextN152] = await Promise.all([
+  // Strategy: pull up to 50 future journeys for each line/destination starting
+  // from the current time, then take the *last* one in the response. That's
+  // the actual last departure of the night. For N152 (night service), query
+  // from 22:30 so we always hit tonight's schedule even during the day.
+  const [jFdoList, jShList, rerList, n152List] = await Promise.all([
     fetchJourney(apiKey, COORDS.saintLazare.lat, COORDS.saintLazare.lon,
                  COORDS.conflansFinDOise.lat, COORDS.conflansFinDOise.lon,
-                 LINES.J, { count: 1, byArrival: true, datetime: cutoff }),
+                 LINES.J, { count: 50, datetime: nowDt }),
     fetchJourney(apiKey, COORDS.saintLazare.lat, COORDS.saintLazare.lon,
                  COORDS.conflansSainteHonorine.lat, COORDS.conflansSainteHonorine.lon,
-                 LINES.J, { count: 1, byArrival: true, datetime: cutoff }),
+                 LINES.J, { count: 50, datetime: nowDt }),
     fetchJourney(apiKey, rerStation.lat, rerStation.lon,
                  COORDS.conflansFinDOise.lat, COORDS.conflansFinDOise.lon,
-                 LINES.RER_A, { count: 1, byArrival: true, datetime: cutoff }),
+                 LINES.RER_A, { count: 50, datetime: nowDt }),
     fetchJourney(apiKey, COORDS.saintLazare.lat, COORDS.saintLazare.lon,
                  COORDS.conflansFinDOise.lat, COORDS.conflansFinDOise.lon,
-                 LINES.N152, { count: 3, byArrival: false, datetime: navitiaDt(new Date()) }),
+                 LINES.N152, { count: 6, datetime: n152Dt }),
   ]);
 
   const summary = {
-    lastJFdo: summariseJourney(lastJFdo?.[0]),
-    lastJSh:  summariseJourney(lastJSh?.[0]),
-    lastRer:  { summary: summariseJourney(lastRer?.[0]), fromStation: rerStation.name },
-    nextN152: (nextN152 || []).map(summariseJourney).filter(Boolean),
+    lastJFdo: summariseJourney((jFdoList || []).slice(-1)[0]),
+    lastJSh:  summariseJourney((jShList  || []).slice(-1)[0]),
+    lastRer:  { summary: summariseJourney((rerList || []).slice(-1)[0]), fromStation: rerStation.name },
+    nextN152: (n152List || []).slice(0, 3).map(summariseJourney).filter(Boolean),
   };
 
   cacheSet('lastTrainData', dehydrate(summary));
@@ -284,12 +290,11 @@ export class LastTrainWidget {
       `;
       this.setBody(html);
 
-      // Subtitle: the latest of the lot
+      // Subtitle: the latest J or RER A (excluding N152 — it runs all night)
       const candidates = [];
       if (d.lastJFdo) candidates.push({ label: 'J', t: d.lastJFdo.depart });
       if (d.lastJSh)  candidates.push({ label: 'J-SH', t: d.lastJSh.depart });
       if (d.lastRer?.summary)  candidates.push({ label: 'RER A', t: d.lastRer.summary.depart });
-      if (d.nextN152[0]) candidates.push({ label: 'N152', t: d.nextN152[0].depart });
       if (candidates.length === 0) {
         this.setSubtitle('aucune donnée');
       } else {

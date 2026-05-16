@@ -20,7 +20,7 @@ export const ICONS = {
   plus:          svg('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>'),
   external:      svg('<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>'),
   search:        svg('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'),
-  train:         svg('<rect x="4" y="3" width="16" height="16" rx="2"/><path d="M4 11h16"/><line x1="12" y1="3" x2="12" y2="11"/><circle cx="8" cy="15" r="1"/><circle cx="16" cy="15" r="1"/><path d="M7 22l2-3M17 22l-2-3"/>'),
+  train:         svg('<rect x="5" y="3" width="14" height="15" rx="6"/><line x1="5" y1="11" x2="19" y2="11"/><circle cx="9" cy="15" r="0.5" fill="currentColor"/><circle cx="15" cy="15" r="0.5" fill="currentColor"/><path d="M7 22l2-4"/><path d="M17 22l-2-4"/>'),
   zap:           svg('<polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'),
   note:          svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/>'),
   check:         svg('<polyline points="20 6 9 17 4 12"/>'),

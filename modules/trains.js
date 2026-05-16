@@ -129,11 +129,13 @@ function renderRow(d, { highlightLast = false } = {}) {
     ? d.aimed.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
     : '';
   const status = statusBadge(d);
-  const minLabel = mins < 0 ? 'parti' : mins === 0 ? 'maintenant' : `${mins} min`;
+  const isNow = mins === 0;
+  const minLabel = mins < 0 ? 'parti' : isNow ? 'imminent' : `${mins} min`;
+  const whenExtraCls = isNow ? 'train-row__when--now' : '';
 
   return `
     <div class="${cls.join(' ')}">
-      <div class="train-row__when">${escapeHTML(minLabel)}<small>${escapeHTML(aimedTime)}${d.platform ? ' · voie ' + escapeHTML(d.platform) : ''}</small></div>
+      <div class="train-row__when ${whenExtraCls}">${escapeHTML(minLabel)}<small>${escapeHTML(aimedTime)}${d.platform ? ' · voie ' + escapeHTML(d.platform) : ''}</small></div>
       <div class="train-row__dest">${escapeHTML(d.destination || '—')}</div>
       <div class="train-row__status ${status.cls}">${escapeHTML(status.text)}</div>
     </div>
@@ -312,7 +314,7 @@ export class TrainsWidget {
     let html = `<div class="train-section-label">Vers Conflans Fin d'Oise</div>`;
     html += renderList(primary, { markLast: false });
     if (backup.length > 0) {
-      html += `<div class="train-section-label train-section-label--backup">Vers Conflans-Sainte-Honorine <small style="text-transform:none;letter-spacing:normal;font-weight:400;opacity:0.8">(puis 20 min à pied)</small></div>`;
+      html += `<div class="train-section-label train-section-label--backup">Vers Conflans-Sainte-Honorine</div>`;
       html += renderList(backup);
     }
     this.setBody(html, this.buildSummary(primary.length ? primary : backup));

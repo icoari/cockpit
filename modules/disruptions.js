@@ -121,11 +121,11 @@ async function fetchLineDisruptions(apiKey, line) {
 }
 
 async function loadAll(apiKey) {
-  const cached = cacheGet('disruptions', CACHE_TTL);
+  const cached = cacheGet('disruptions_v2', CACHE_TTL);
   if (cached) return cached;
   const results = await Promise.all(LINES.map(l => fetchLineDisruptions(apiKey, l).catch(() => [])));
   const all = results.flat();
-  cacheSet('disruptions', all);
+  cacheSet('disruptions_v2', all);
   return all;
 }
 
@@ -181,7 +181,7 @@ export class DisruptionsWidget {
       if (e.target.closest('[data-action="refresh"]')) {
         e.stopPropagation();
         haptic(6);
-        cacheBust('disruptions');
+        cacheBust('disruptions_v2');
         this.refresh();
       }
     });

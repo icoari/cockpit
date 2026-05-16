@@ -130,7 +130,7 @@ function renderRow(d, { highlightLast = false } = {}) {
     : '';
   const status = statusBadge(d);
   const isNow = mins === 0;
-  const minLabel = mins < 0 ? 'parti' : isNow ? 'imminent' : `${mins} min`;
+  const minLabel = mins < 0 ? 'parti' : isNow ? 'NOW' : `${mins} min`;
   const whenExtraCls = isNow ? 'train-row__when--now' : '';
 
   return `

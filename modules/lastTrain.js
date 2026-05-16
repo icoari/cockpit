@@ -254,7 +254,7 @@ export class LastTrainWidget {
       let jRow = '';
       if (d.lastJFdo && d.lastJSh && d.lastJSh.depart > d.lastJFdo.depart) {
         jRow = renderRow('Transilien J', 'vers Conflans Fin d\'Oise', d.lastJFdo)
-             + renderRow('Transilien J — backup', 'vers Conflans-Ste-Honorine', d.lastJSh, { backup: true });
+             + renderRow('Transilien J', 'vers Conflans-Ste-Honorine', d.lastJSh, { backup: true });
       } else if (d.lastJFdo) {
         jRow = renderRow('Transilien J', 'vers Conflans Fin d\'Oise', d.lastJFdo);
       } else if (d.lastJSh) {

@@ -44,6 +44,35 @@
 }
 
 /* ============================================================
+   Light theme override (when body.theme-light)
+   ============================================================ */
+body.theme-light {
+  color-scheme: light;
+  --bg: #F4F2EE;
+  --bg-soft: #FFFFFF;
+  --surface: rgba(20, 20, 30, 0.045);
+  --surface-hover: rgba(20, 20, 30, 0.07);
+  --surface-strong: rgba(20, 20, 30, 0.10);
+  --border: rgba(20, 20, 30, 0.09);
+  --border-strong: rgba(20, 20, 30, 0.16);
+  --text:        rgba(15, 15, 25, 0.95);
+  --text-dim:    rgba(15, 15, 25, 0.62);
+  --text-faint:  rgba(15, 15, 25, 0.40);
+  --text-mute:   rgba(15, 15, 25, 0.22);
+  --accent:       #2E8A72;
+  --accent-soft:  rgba(46, 138, 114, 0.13);
+  --accent-glow:  rgba(46, 138, 114, 0.30);
+  --warning:      #C28832;
+  --warning-soft: rgba(194, 136, 50, 0.12);
+  --danger:       #B14C3E;
+  --danger-soft:  rgba(177, 76, 62, 0.10);
+  --success:      #2E8A52;
+  background-image:
+    radial-gradient(circle at 50% -10%, rgba(127, 209, 185, 0.18), transparent 55%),
+    radial-gradient(circle at 0% 40%, rgba(146, 132, 220, 0.08), transparent 60%);
+}
+
+/* ============================================================
    Reset & body
    ============================================================ */
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -55,6 +84,8 @@ body {
   font-weight: 400;
   color: var(--text);
   background-color: var(--bg);
+  color-scheme: dark;
+  transition: background-color 320ms var(--ease), color 320ms var(--ease);
   background-image:
     radial-gradient(circle at 50% -10%, rgba(99, 81, 196, 0.22), transparent 55%),
     radial-gradient(circle at 0% 40%, rgba(40, 90, 150, 0.10), transparent 60%);
@@ -74,50 +105,13 @@ button {
 }
 
 /* ============================================================
-   Top overlay (settings affordance only)
-   ============================================================ */
-.topbar-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  height: calc(48px + var(--safe-top));
-  padding-top: var(--safe-top);
-  z-index: 30;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  padding-right: 18px;
-  pointer-events: none;
-}
-
-.topbar-overlay__btn {
-  pointer-events: auto;
-  width: 38px;
-  height: 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  color: var(--text-dim);
-  padding: 0;
-  transition: all 160ms var(--ease);
-}
-
-.topbar-overlay__btn:active { transform: scale(0.94); }
-.topbar-overlay__btn:hover { color: var(--text); background: rgba(255, 255, 255, 0.1); }
-.topbar-overlay__btn svg { width: 18px; height: 18px; }
-
-/* ============================================================
    App container & panes
    ============================================================ */
 .app {
   max-width: 560px;
   margin: 0 auto;
   padding: 0 18px;
-  padding-top: calc(var(--safe-top) + 56px);
+  padding-top: calc(var(--safe-top) + 22px);
   padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 40px);
 }
 
@@ -1074,3 +1068,294 @@ button {
   border-radius: 7px;
 }
 .crud-item__action:hover { color: var(--danger); }
+
+/* ============================================================
+   AI watch search + lang badge
+   ============================================================ */
+.ai-search-row {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.ai-search-row__icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.ai-search-row__icon svg { width: 100%; height: 100%; }
+
+.ai-search {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 10px 12px 10px 34px;
+  border-radius: 12px;
+  color-scheme: dark;
+  transition: border-color 160ms var(--ease);
+}
+.ai-search:focus { outline: none; border-color: var(--accent-glow); }
+.ai-search::placeholder { color: var(--text-faint); }
+
+body.theme-light .ai-search { color-scheme: light; }
+
+/* Light theme: tabbar and card edge tweaks */
+body.theme-light .tabbar {
+  background: rgba(255, 255, 255, 0.78);
+  border-top: 1px solid var(--border);
+}
+
+body.theme-light .card {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 18px rgba(20, 20, 30, 0.04);
+}
+
+body.theme-light .card::before {
+  background: linear-gradient(90deg, transparent, rgba(20, 20, 30, 0.05), transparent);
+}
+
+body.theme-light .train-row,
+body.theme-light .ai-item,
+body.theme-light .gas-row,
+body.theme-light .crud-item {
+  background: rgba(20, 20, 30, 0.02);
+}
+
+body.theme-light .train-row--last {
+  background: linear-gradient(180deg, var(--accent-soft), transparent);
+}
+
+body.theme-light .subtabs,
+body.theme-light .theme-row {
+  background: rgba(20, 20, 30, 0.05);
+}
+
+body.theme-light .subtab--active {
+  background: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(20, 20, 30, 0.08);
+}
+
+.ai-item__lang {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  margin-left: 2px;
+}
+
+.ai-chip-sep {
+  width: 1px;
+  background: var(--border);
+  margin: 4px 4px;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   Theme selector buttons
+   ============================================================ */
+.theme-row {
+  display: flex;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.18);
+  padding: 4px;
+  border-radius: 14px;
+}
+
+body.theme-light .theme-row { background: rgba(0, 0, 0, 0.04); }
+
+.theme-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 9px 0;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-dim);
+  transition: all 180ms var(--ease);
+}
+
+.theme-btn--active {
+  background: var(--surface-strong);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ============================================================
+   Calendar widget
+   ============================================================ */
+.event-group { margin-bottom: 14px; }
+.event-group:last-child { margin-bottom: 0; }
+
+.event-group__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+  padding-left: 2px;
+}
+
+.event-list { display: flex; flex-direction: column; gap: 8px; }
+
+.event {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  gap: 12px;
+  padding: 11px 12px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+body.theme-light .event { background: rgba(20, 20, 30, 0.03); }
+
+.event__time {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.event__main { min-width: 0; }
+
+.event__title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.event__location {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signin-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.signin-block__text {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.settings-info {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 6px;
+}
+
+/* ============================================================
+   Bins / encombrants widget
+   ============================================================ */
+.bins-hero {
+  text-align: center;
+  padding: 6px 0 14px;
+}
+
+.bins-hero__number {
+  font-size: 64px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.bins-hero__number small {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-faint);
+  margin-left: 4px;
+  letter-spacing: 0;
+}
+
+.bins-hero__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-top: 8px;
+}
+
+.bins-hero__addr {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 6px;
+}
+
+.bins-rest {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.bins-rest__title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+}
+
+.bins-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 4px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.bins-row:last-child { border-bottom: none; }
+
+.bins-row__day {
+  color: var(--text);
+  text-transform: lowercase;
+}
+.bins-row__day::first-letter { text-transform: uppercase; }
+
+.bins-row__when {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}

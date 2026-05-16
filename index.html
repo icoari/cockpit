@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#0A0A0F">
+  <meta name="theme-color" content="#0A0A0F" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#F4F2EE" media="(prefers-color-scheme: light)">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Cockpit">
@@ -34,13 +35,8 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- Top floating bar: just the settings affordance, sits over content -->
-  <div class="topbar-overlay">
-    <button class="topbar-overlay__btn" id="settingsBtn" type="button" aria-label="Réglages"></button>
-  </div>
-
   <main class="app">
-    <header class="page-header">
+    <header class="page-header" data-page-header>
       <div class="page-header__inner">
         <p class="page-header__eyebrow" id="pageSection">Perso</p>
         <h1 class="page-header__title" id="dateLabel">samedi 16 mai</h1>
@@ -55,12 +51,18 @@
       <div class="widget" data-widget="gas"></div>
       <div class="widget" data-widget="weatherCard"></div>
       <div class="widget" data-widget="air"></div>
+      <div class="widget" data-widget="bins"></div>
     </section>
 
     <section class="pane" data-pane="pro" hidden>
       <div class="widget" data-widget="trains-aller"></div>
       <div class="widget" data-widget="trains-retour"></div>
+      <div class="widget" data-widget="calendar"></div>
       <div class="widget" data-widget="aiwatch"></div>
+    </section>
+
+    <section class="pane" data-pane="settings" hidden>
+      <div id="settingsBody"></div>
     </section>
   </main>
 
@@ -73,17 +75,11 @@
       <span class="tabbar-btn__icon" data-icon="briefcase"></span>
       <span class="tabbar-btn__label">Pro</span>
     </button>
+    <button class="tabbar-btn" data-tab="settings" type="button">
+      <span class="tabbar-btn__icon" data-icon="settings"></span>
+      <span class="tabbar-btn__label">Réglages</span>
+    </button>
   </nav>
-
-  <div class="modal-backdrop" id="settingsBackdrop">
-    <div class="modal modal--full" role="dialog" aria-modal="true" aria-label="Réglages">
-      <div class="modal__header">
-        <h2 class="modal__title">Réglages</h2>
-        <button class="modal__close" id="settingsClose" type="button">Fermer</button>
-      </div>
-      <div class="modal__body" id="settingsBody"></div>
-    </div>
-  </div>
 
   <script type="module" src="app.js"></script>
   <script>

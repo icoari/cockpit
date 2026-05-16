@@ -7,12 +7,31 @@ import { AiWatchWidget } from './modules/aiwatch.js';
 import { GasWidget } from './modules/gas.js';
 import { WeatherCard } from './modules/weatherCard.js';
 import { AirQualityWidget } from './modules/airquality.js';
+import { CalendarWidget } from './modules/calendar.js';
+import { BinsWidget } from './modules/bins.js';
 import { SettingsPanel } from './modules/settings.js';
+
+// ---------- Theme ----------
+function applyTheme() {
+  const t = getSettings().theme || 'auto';
+  document.body.classList.remove('theme-light', 'theme-dark');
+  if (t === 'light') {
+    document.body.classList.add('theme-light');
+  } else if (t === 'dark') {
+    document.body.classList.add('theme-dark');
+  } else {
+    // auto: rely on prefers-color-scheme
+    if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+      document.body.classList.add('theme-light');
+    } else {
+      document.body.classList.add('theme-dark');
+    }
+  }
+}
 
 // ---------- Page header ----------
 function renderHeader() {
   document.getElementById('dateLabel').textContent = formatDateLong(new Date());
-  document.getElementById('settingsBtn').innerHTML = ICONS.settings;
   renderHeaderWeather(
     document.getElementById('weatherIcon'),
     null,
@@ -22,6 +41,8 @@ function renderHeader() {
 }
 
 // ---------- Tabs ----------
+const TAB_LABELS = { perso: 'Perso', pro: 'Pro', settings: 'Réglages' };
+
 function setActiveTab(name) {
   document.querySelectorAll('.tabbar-btn').forEach(b => {
     b.classList.toggle('tabbar-btn--active', b.dataset.tab === name);
@@ -29,14 +50,16 @@ function setActiveTab(name) {
   document.querySelectorAll('.pane').forEach(p => {
     p.hidden = p.dataset.pane !== name;
   });
-  document.getElementById('pageSection').textContent = name === 'pro' ? 'Pro' : 'Perso';
+  // Page header: hide on settings (settings has its own implicit header via sections)
+  const header = document.querySelector('[data-page-header]');
+  if (header) header.hidden = (name === 'settings');
+
+  document.getElementById('pageSection').textContent = TAB_LABELS[name] || '';
   updateSettings({ activeTab: name });
-  // Scroll to top of new pane
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function initTabs() {
-  // Inject SVG icons
   document.querySelectorAll('[data-icon]').forEach(el => {
     const name = el.dataset.icon;
     if (ICONS[name]) el.innerHTML = ICONS[name];
@@ -60,16 +83,22 @@ function mountWidgets() {
   widgets.gas         = new GasWidget(document.querySelector('[data-widget="gas"]'));
   widgets.weatherCard = new WeatherCard(document.querySelector('[data-widget="weatherCard"]'));
   widgets.air         = new AirQualityWidget(document.querySelector('[data-widget="air"]'));
+  widgets.bins        = new BinsWidget(document.querySelector('[data-widget="bins"]'));
+
   widgets.trainsAller  = new TrainsWidget(document.querySelector('[data-widget="trains-aller"]'), 'aller');
   widgets.trainsRetour = new TrainsWidget(document.querySelector('[data-widget="trains-retour"]'), 'retour');
+  widgets.calendar     = new CalendarWidget(document.querySelector('[data-widget="calendar"]'));
   widgets.aiwatch      = new AiWatchWidget(document.querySelector('[data-widget="aiwatch"]'));
 }
 
 // ---------- Settings ----------
+let settingsPanel = null;
 function initSettings() {
-  const panel = new SettingsPanel(
+  settingsPanel = new SettingsPanel(
     document.getElementById('settingsBody'),
     () => {
+      // After any settings change, refresh affected pieces
+      applyTheme();
       Object.values(widgets).forEach(w => {
         if (typeof w.refresh === 'function') {
           try { w.refresh(); } catch {}
@@ -79,26 +108,18 @@ function initSettings() {
     }
   );
 
-  document.getElementById('settingsBtn').addEventListener('click', () => {
+  // Weather chip → open settings tab
+  document.getElementById('weatherMini').addEventListener('click', () => {
     haptic(4);
-    panel.open();
-  });
-  document.getElementById('settingsClose').addEventListener('click', () => panel.close());
-  document.getElementById('settingsBackdrop').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) panel.close();
+    setActiveTab('settings');
   });
 
+  // Any element marked [data-open-settings] opens the settings tab
   document.body.addEventListener('click', (e) => {
     if (e.target.closest('[data-open-settings]')) {
       e.preventDefault();
-      panel.open();
+      setActiveTab('settings');
     }
-  });
-
-  // Weather chip tap → open settings (location config)
-  document.getElementById('weatherMini').addEventListener('click', () => {
-    haptic(4);
-    panel.open();
   });
 }
 
@@ -117,6 +138,7 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('focus', refreshLiveData);
 
+// Live train auto-refresh every 90 s
 setInterval(() => {
   if (!document.hidden) {
     try { widgets.trainsAller?.refresh(); } catch {}
@@ -124,7 +146,13 @@ setInterval(() => {
   }
 }, 90 * 1000);
 
+// Re-apply theme when system color scheme changes (auto mode)
+window.matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', () => {
+  if ((getSettings().theme || 'auto') === 'auto') applyTheme();
+});
+
 // ---------- Init ----------
+applyTheme();
 renderHeader();
 mountWidgets();
 initTabs();

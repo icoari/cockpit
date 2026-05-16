@@ -7,12 +7,9 @@ const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 const ENDPOINT = 'https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/records';
 
 const FUEL_LABELS = {
-  gazole: 'Gazole',
-  sp95:   'SP95',
-  sp98:   'SP98',
-  e85:    'E85',
-  e10:    'E10',
-  gplc:   'GPL',
+  sp95: 'SP95',
+  sp98: 'SP98',
+  e10:  'E10',
 };
 
 async function fetchStations(lat, lon, radiusKm) {

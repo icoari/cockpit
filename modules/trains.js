@@ -5,14 +5,14 @@ import { getPosition, distanceKm } from './geolocation.js';
 
 const CACHE_TTL = 60 * 1000;
 
-// Known RER A stations in Paris with coordinates, for "nearest" lookup
+// RER A stations in Paris with verified IDFM stop IDs + coordinates
 const PARIS_RER_A = [
-  { name: 'Auber',                stopRef: 'STIF:StopArea:SP:45873:', lat: 48.8717, lon: 2.3308 },
-  { name: 'Châtelet-Les Halles',  stopRef: 'STIF:StopArea:SP:45102:', lat: 48.8617, lon: 2.3470 },
-  { name: 'Gare de Lyon',         stopRef: 'STIF:StopArea:SP:474151:', lat: 48.8443, lon: 2.3743 },
-  { name: 'Nation',               stopRef: 'STIF:StopArea:SP:43135:', lat: 48.8484, lon: 2.3958 },
-  { name: 'La Défense',           stopRef: 'STIF:StopArea:SP:43195:', lat: 48.8919, lon: 2.2384 },
-  { name: 'Charles de Gaulle - Étoile', stopRef: 'STIF:StopArea:SP:43163:', lat: 48.8748, lon: 2.2950 },
+  { name: 'Auber',                      stopRef: 'STIF:StopArea:SP:45873:',  lat: 48.8717, lon: 2.3308 },
+  { name: 'Châtelet-Les Halles',        stopRef: 'STIF:StopArea:SP:45102:',  lat: 48.8617, lon: 2.3470 },
+  { name: 'Charles de Gaulle - Étoile', stopRef: 'STIF:StopArea:SP:58759:',  lat: 48.8748, lon: 2.2950 },
+  { name: 'La Défense',                 stopRef: 'STIF:StopArea:SP:470549:', lat: 48.8919, lon: 2.2384 },
+  { name: 'Gare de Lyon',               stopRef: 'STIF:StopArea:SP:470195:', lat: 48.8443, lon: 2.3743 },
+  { name: 'Nation',                     stopRef: 'STIF:StopArea:SP:473875:', lat: 48.8484, lon: 2.3958 },
 ];
 
 // ---------- Data fetching ----------
@@ -286,7 +286,7 @@ export class TrainsWidget {
     const data = await fetchStop(stopRef, settings.idfm.apiKey, { force });
     const all = extractDepartures(data);
     const filtered = all.filter(d => isParisBoundFromConflans(d, lineRef));
-    const trimmed = filtered.slice(0, 5);
+    const trimmed = filtered.slice(0, 3);
     this.setBody(renderList(trimmed), this.buildSummary(trimmed));
   }
 
@@ -306,8 +306,8 @@ export class TrainsWidget {
     const conflansBound = all.filter(isConflansBoundFromParisJ);
 
     // Split: trains passing through Fin d'Oise vs only Sainte-Honorine (backup)
-    const primary = conflansBound.filter(d => jBranch(d.destination) === 'fdo').slice(0, 5);
-    const backup = conflansBound.filter(d => jBranch(d.destination) === 'sh').slice(0, 3);
+    const primary = conflansBound.filter(d => jBranch(d.destination) === 'fdo').slice(0, 3);
+    const backup = conflansBound.filter(d => jBranch(d.destination) === 'sh').slice(0, 2);
 
     let html = `<div class="train-section-label">Vers Conflans Fin d'Oise</div>`;
     html += renderList(primary, { markLast: true });
@@ -331,7 +331,7 @@ export class TrainsWidget {
 
     const data = await fetchStop(station.stopRef, settings.idfm.apiKey, { force });
     const all = extractDepartures(data);
-    const filtered = all.filter(isConflansBoundFromParisRER).slice(0, 5);
+    const filtered = all.filter(isConflansBoundFromParisRER).slice(0, 3);
 
     const stationLabel = usedGeoloc
       ? `Depuis ${station.name} (le plus proche)`

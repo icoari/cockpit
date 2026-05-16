@@ -4,7 +4,6 @@ import { getSettings, updateSettings } from './modules/state.js';
 import { renderHeaderWeather } from './modules/weather.js';
 import { TrainsWidget } from './modules/trains.js';
 import { LastTrainWidget } from './modules/lastTrain.js';
-import { DisruptionsWidget } from './modules/disruptions.js';
 import { FeedWidget } from './modules/aiwatch.js';
 import { YoutubeWidget } from './modules/youtube.js';
 import { HackerNewsWidget } from './modules/hackernews.js';
@@ -92,7 +91,6 @@ function mountWidgets() {
   widgets.bins        = new BinsWidget(document.querySelector('[data-widget="bins"]'));
   widgets.air         = new AirQualityWidget(document.querySelector('[data-widget="air"]'));
 
-  widgets.disruptions  = new DisruptionsWidget(document.querySelector('[data-widget="disruptions"]'));
   widgets.trainsAller  = new TrainsWidget(document.querySelector('[data-widget="trains-aller"]'), 'aller');
   widgets.trainsRetour = new TrainsWidget(document.querySelector('[data-widget="trains-retour"]'), 'retour');
   widgets.lastTrain    = new LastTrainWidget(document.querySelector('[data-widget="last-train"]'));

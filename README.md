@@ -1,4 +1,4 @@
-# Cockpit
+# Bob
 
 Dashboard quotidien personnel — PWA mobile-first.
 

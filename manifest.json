@@ -1,12 +1,12 @@
 {
-  "name": "Cockpit",
-  "short_name": "Cockpit",
-  "description": "Dashboard quotidien : trains, météo, veille IA, captures, tâches, habitudes.",
+  "name": "Bob",
+  "short_name": "Bob",
+  "description": "Dashboard quotidien personnel : trains, météo, agenda, veille tech & IA, et plus.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#0A0A0F",
-  "theme_color": "#0A0A0F",
+  "background_color": "#07070C",
+  "theme_color": "#07070C",
   "orientation": "portrait",
   "icons": [
     {

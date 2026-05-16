@@ -7,14 +7,13 @@
     </radialGradient>
   </defs>
   <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <g fill="#7FD1B9">
-    <!-- 4-point star (sparkle): two crossed elongated diamonds -->
-    <polygon points="256,80 282,256 256,432 230,256"/>
-    <polygon points="80,256 256,230 432,256 256,282"/>
-    <!-- Small accent dots in the 4 diagonal corners -->
-    <circle cx="146" cy="146" r="6" opacity="0.55"/>
-    <circle cx="366" cy="146" r="6" opacity="0.55"/>
-    <circle cx="146" cy="366" r="6" opacity="0.55"/>
-    <circle cx="366" cy="366" r="6" opacity="0.55"/>
-  </g>
+  <!-- Smile: warm wide arc -->
+  <path d="M 148 290 Q 256 388 364 290"
+        stroke="#7FD1B9" stroke-width="24"
+        fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Left eye: open round dot -->
+  <circle cx="184" cy="212" r="20" fill="#7FD1B9"/>
+  <!-- Right eye: closed wink (horizontal stroke) -->
+  <line x1="290" y1="212" x2="346" y2="212"
+        stroke="#7FD1B9" stroke-width="22" stroke-linecap="round"/>
 </svg>

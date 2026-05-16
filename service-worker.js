@@ -1,4 +1,4 @@
-const CACHE = 'cockpit-v7';
+const CACHE = 'cockpit-v8';
 const ASSETS = [
   './',
   './index.html',
@@ -51,6 +51,7 @@ self.addEventListener('fetch', (e) => {
    || url.hostname.includes('accounts.google.com')
    || url.hostname.includes('overpass-api.de')
    || url.hostname.includes('corsproxy.io')
+   || url.hostname.includes('data.iledefrance.fr')
    || url.hostname.includes('youtube.com')
    || url.hostname.includes('ytimg.com')) {
     e.respondWith(fetch(req).catch(() => caches.match(req)));

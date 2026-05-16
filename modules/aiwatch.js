@@ -4,7 +4,7 @@ import { escapeHTML, fetchWithTimeout, timeAgo, haptic, debounce } from './util.
 
 const CACHE_TTL = 10 * 60 * 1000;
 const HN_API = 'https://hn.algolia.com/api/v1/search_by_date';
-const RSS2JSON = 'https://api.rss2json.com/v1/api.json';
+const CORS_PROXY = 'https://corsproxy.io/?';
 
 const HN_DEFAULT_QUERIES = {
   ai:   'AI OR LLM OR GPT OR Claude OR Anthropic OR OpenAI',
@@ -34,21 +34,58 @@ async function fetchHN(category, searchQuery) {
   }));
 }
 
+function parseFeedXml(xml, src) {
+  const dom = new DOMParser().parseFromString(xml, 'text/xml');
+  if (dom.querySelector('parsererror')) return [];
+  // Atom or RSS — try both
+  const atomEntries = Array.from(dom.getElementsByTagName('entry'));
+  if (atomEntries.length) {
+    return atomEntries.map(e => {
+      const title = e.getElementsByTagName('title')[0]?.textContent || '';
+      let link = '';
+      for (const l of Array.from(e.getElementsByTagName('link'))) {
+        if (l.getAttribute('rel') === 'alternate' || !l.getAttribute('rel')) link = l.getAttribute('href') || link;
+      }
+      const published = e.getElementsByTagName('published')[0]?.textContent
+                     || e.getElementsByTagName('updated')[0]?.textContent;
+      const summary = e.getElementsByTagName('summary')[0]?.textContent
+                   || e.getElementsByTagName('content')[0]?.textContent || '';
+      return {
+        title: title.trim(),
+        url: link.trim(),
+        source: src.name,
+        sourceId: src.id,
+        lang: src.lang || 'en',
+        date: published ? new Date(published) : new Date(),
+        summary: stripHTML(summary).slice(0, 240),
+      };
+    }).filter(it => it.url && it.title);
+  }
+  // RSS 2.0
+  const items = Array.from(dom.getElementsByTagName('item'));
+  return items.map(e => {
+    const title = e.getElementsByTagName('title')[0]?.textContent || '';
+    const link = e.getElementsByTagName('link')[0]?.textContent || '';
+    const published = e.getElementsByTagName('pubDate')[0]?.textContent;
+    const description = e.getElementsByTagName('description')[0]?.textContent || '';
+    return {
+      title: title.trim(),
+      url: link.trim(),
+      source: src.name,
+      sourceId: src.id,
+      lang: src.lang || 'en',
+      date: published ? new Date(published) : new Date(),
+      summary: stripHTML(description).slice(0, 240),
+    };
+  }).filter(it => it.url && it.title);
+}
+
 async function fetchRSS(src) {
-  const url = `${RSS2JSON}?rss_url=${encodeURIComponent(src.url)}`;
-  const resp = await fetchWithTimeout(url, {}, 8000);
+  const url = CORS_PROXY + encodeURIComponent(src.url);
+  const resp = await fetchWithTimeout(url, {}, 9000);
   if (!resp.ok) return [];
-  const data = await resp.json();
-  if (data.status !== 'ok' || !Array.isArray(data.items)) return [];
-  return data.items.map(it => ({
-    title: it.title,
-    url: it.link,
-    source: data.feed?.title || src.name,
-    sourceId: src.id,
-    lang: src.lang || 'en',
-    date: new Date(it.pubDate || it.published || Date.now()),
-    summary: stripHTML(it.description || it.content || '').slice(0, 240),
-  }));
+  const text = await resp.text();
+  return parseFeedXml(text, src);
 }
 
 async function fetchAll(category, searchQuery) {

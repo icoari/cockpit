@@ -1381,8 +1381,75 @@ body.theme-light .event { background: rgba(20, 20, 30, 0.03); }
 .bins-hero__date::first-letter { text-transform: uppercase; }
 
 /* ============================================================
-   Collectes (toutes — OM, tri, encombrants, verre)
+   Collectes — 3-column compact layout
    ============================================================ */
+.collecte-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.collecte-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 14px 8px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  text-align: center;
+}
+body.theme-light .collecte-col { background: rgba(20, 20, 30, 0.025); }
+
+.collecte-col--accent {
+  background: var(--accent-soft);
+  border-color: var(--accent-glow);
+}
+
+.collecte-col--disabled .collecte-col__num { color: var(--text-faint); }
+.collecte-col--disabled { opacity: 0.5; }
+
+.collecte-col__label {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.collecte-col__num {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.collecte-col--accent .collecte-col__num {
+  color: var(--accent);
+}
+
+.collecte-col__num small {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-faint);
+  margin-left: 2px;
+  letter-spacing: 0;
+}
+
+.collecte-col__date {
+  font-size: 10.5px;
+  color: var(--text-dim);
+  text-transform: lowercase;
+  letter-spacing: -0.01em;
+}
+.collecte-col__date::first-letter { text-transform: uppercase; }
+
+/* Legacy (no longer used but kept for safety) */
 .collecte-sections {
   display: flex;
   flex-direction: column;

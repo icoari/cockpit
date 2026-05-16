@@ -2,22 +2,25 @@ import { getSettings, cacheGet, cacheSet, cacheBust, markAiRead, isAiRead, setFe
 import { ICONS } from './icons.js';
 import { escapeHTML, fetchWithTimeout, timeAgo, haptic, debounce } from './util.js';
 
-const CACHE_TTL = 30 * 60 * 1000;       // 30 min — videos don't churn fast
+const CACHE_TTL = 30 * 60 * 1000;
 const CORS_PROXY = 'https://corsproxy.io/?';
 const YT_RSS = (channelId) => `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+const MAX_DAYS = 10;
+const MAX_PER_CHANNEL = 4;
+const SHORTS_RE = /#shorts?\b/i;
 
 function parseYouTubeFeed(xmlText, channel) {
   const dom = new DOMParser().parseFromString(xmlText, 'text/xml');
   if (dom.querySelector('parsererror')) return [];
   const entries = Array.from(dom.getElementsByTagName('entry'));
   return entries.map(e => {
-    const title = e.getElementsByTagName('title')[0]?.textContent || '';
+    const title = (e.getElementsByTagName('title')[0]?.textContent || '').trim();
     let link = '';
     for (const l of Array.from(e.getElementsByTagName('link'))) {
       if (l.getAttribute('rel') === 'alternate') link = l.getAttribute('href');
     }
     const published = e.getElementsByTagName('published')[0]?.textContent;
-    const author = e.getElementsByTagName('name')[0]?.textContent || channel.name;
+    const author = (e.getElementsByTagName('name')[0]?.textContent || channel.name).trim();
     let videoId = '';
     for (const c of Array.from(e.childNodes)) {
       if (c.localName === 'videoId') { videoId = c.textContent; break; }
@@ -26,21 +29,30 @@ function parseYouTubeFeed(xmlText, channel) {
       const m = link.match(/v=([A-Za-z0-9_-]+)/);
       if (m) videoId = m[1];
     }
-    const thumbnail = videoId
-      ? `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`
-      : '';
+    // Read media:description / media:title for shorts detection in description text
+    let mediaDesc = '';
+    for (const c of Array.from(e.childNodes)) {
+      if (c.localName === 'group') {
+        for (const sub of Array.from(c.childNodes)) {
+          if (sub.localName === 'description') mediaDesc = sub.textContent || '';
+        }
+      }
+    }
+    const isShort = SHORTS_RE.test(title) || SHORTS_RE.test(mediaDesc) || /\/shorts\//.test(link);
+    const thumbnail = videoId ? `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg` : '';
     return {
-      title: title.trim(),
+      title,
       url: link,
       videoId,
       channelId: channel.channelId,
-      channelName: author.trim(),
+      channelName: author,
       channelLabel: channel.name,
       lang: channel.lang || 'en',
       date: published ? new Date(published) : new Date(),
       thumbnail,
+      isShort,
     };
-  }).filter(v => v.url && v.title);
+  }).filter(v => v.url && v.title && !v.isShort);
 }
 
 async function fetchChannel(channel) {
@@ -48,7 +60,12 @@ async function fetchChannel(channel) {
   const resp = await fetchWithTimeout(url, {}, 9000);
   if (!resp.ok) return [];
   const text = await resp.text();
-  return parseYouTubeFeed(text, channel);
+  // Filter shorts + cap per channel + last MAX_DAYS days
+  const cutoff = Date.now() - MAX_DAYS * 86400 * 1000;
+  return parseYouTubeFeed(text, channel)
+    .filter(v => v.date.getTime() > cutoff)
+    .sort((a, b) => b.date - a.date)
+    .slice(0, MAX_PER_CHANNEL);
 }
 
 async function fetchAll(searchQuery) {
@@ -76,12 +93,11 @@ async function fetchAll(searchQuery) {
     );
   }
 
-  // Keep videos from the past 60 days
-  const cutoff = Date.now() - 60 * 86400 * 1000;
+  const cutoff = Date.now() - MAX_DAYS * 86400 * 1000;
   items = items.filter(it => it.date.getTime() > cutoff);
-
   items.sort((a, b) => b.date - a.date);
-  items = items.slice(0, 60);
+  // Round-robin cap is already done per channel; merged cap to avoid huge feeds
+  items = items.slice(0, 40);
 
   cacheSet(cacheKey, items.map(it => ({ ...it, date: it.date.toISOString() })));
   return items;

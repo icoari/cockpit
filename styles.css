@@ -410,6 +410,89 @@ button {
 .train-section-label--backup { color: var(--warning); }
 
 /* ============================================================
+   Dernier train widget
+   ============================================================ */
+.last-train-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.last-train-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  align-items: baseline;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+body.theme-light .last-train-row { background: rgba(20, 20, 30, 0.025); }
+
+.last-train-row__line {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  grid-column: 1 / 2;
+}
+
+.last-train-row__line small {
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--text-faint);
+  margin-left: 4px;
+}
+
+.last-train-row__main {
+  grid-column: 2 / 3;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.last-train-row__time {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.last-train-row__until {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.last-train-row__dest {
+  grid-column: 1 / -1;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.last-train-row--empty .last-train-row__empty {
+  grid-column: 2 / -1;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.last-train-foot {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  text-align: center;
+  margin-top: 12px;
+  letter-spacing: 0.02em;
+}
+
+/* ============================================================
    AI watch
    ============================================================ */
 .ai-filters {

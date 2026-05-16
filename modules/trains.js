@@ -6,7 +6,7 @@ import { getPosition, distanceKm } from './geolocation.js';
 const CACHE_TTL = 60 * 1000;
 
 // RER A stations in Paris with verified IDFM stop IDs + coordinates
-const PARIS_RER_A = [
+export const PARIS_RER_A = [
   { name: 'Auber',                      stopRef: 'STIF:StopArea:SP:45873:',  lat: 48.8717, lon: 2.3308 },
   { name: 'Châtelet-Les Halles',        stopRef: 'STIF:StopArea:SP:45102:',  lat: 48.8617, lon: 2.3470 },
   { name: 'Charles de Gaulle - Étoile', stopRef: 'STIF:StopArea:SP:58759:',  lat: 48.8748, lon: 2.2950 },
@@ -16,7 +16,7 @@ const PARIS_RER_A = [
 ];
 
 // ---------- Data fetching ----------
-async function fetchStop(stopRef, apiKey, { force = false } = {}) {
+export async function fetchStop(stopRef, apiKey, { force = false } = {}) {
   const cacheKey = `train_${stopRef}`;
   if (!force) {
     const cached = cacheGet(cacheKey, CACHE_TTL);
@@ -35,7 +35,7 @@ async function fetchStop(stopRef, apiKey, { force = false } = {}) {
   return data;
 }
 
-function extractDepartures(siri) {
+export function extractDepartures(siri) {
   if (!siri) return [];
   const delivery = siri?.Siri?.ServiceDelivery?.StopMonitoringDelivery?.[0];
   const visits = delivery?.MonitoredStopVisit || [];
@@ -82,7 +82,7 @@ function isParisBoundFromConflans(dep, lineRef, paris = true) {
   return true;
 }
 
-function isConflansBoundFromParisJ(dep) {
+export function isConflansBoundFromParisJ(dep) {
   if (dep.lineRef !== 'STIF:Line::C01739:') return false;
   const dest = (dep.destination || '').toLowerCase();
   // J line trains that pass through Conflans-Fin-d'Oise OR Conflans-Sainte-Honorine
@@ -100,7 +100,7 @@ function jBranch(dest) {
   return null;
 }
 
-function isConflansBoundFromParisRER(dep) {
+export function isConflansBoundFromParisRER(dep) {
   if (dep.lineRef !== 'STIF:Line::C01742:') return false;
   const dest = (dep.destination || '').toLowerCase();
   // RER A trains to Conflans Fin d'Oise are only those bound for Cergy le Haut

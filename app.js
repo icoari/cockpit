@@ -3,6 +3,7 @@ import { formatDateLong, haptic } from './modules/util.js';
 import { getSettings, updateSettings } from './modules/state.js';
 import { renderHeaderWeather } from './modules/weather.js';
 import { TrainsWidget } from './modules/trains.js';
+import { LastTrainWidget } from './modules/lastTrain.js';
 import { FeedWidget } from './modules/aiwatch.js';
 import { YoutubeWidget } from './modules/youtube.js';
 import { GasWidget } from './modules/gas.js';
@@ -91,6 +92,7 @@ function mountWidgets() {
 
   widgets.trainsAller  = new TrainsWidget(document.querySelector('[data-widget="trains-aller"]'), 'aller');
   widgets.trainsRetour = new TrainsWidget(document.querySelector('[data-widget="trains-retour"]'), 'retour');
+  widgets.lastTrain    = new LastTrainWidget(document.querySelector('[data-widget="last-train"]'));
   widgets.youtube      = new YoutubeWidget(document.querySelector('[data-widget="youtube"]'));
   widgets.techwatch    = new FeedWidget(document.querySelector('[data-widget="techwatch"]'), { category: 'tech', title: 'Veille tech' });
 }
@@ -147,6 +149,7 @@ setInterval(() => {
   if (!document.hidden) {
     try { widgets.trainsAller?.refresh(); } catch {}
     try { widgets.trainsRetour?.refresh(); } catch {}
+    try { widgets.lastTrain?.refresh(); } catch {}
   }
 }, 90 * 1000);
 

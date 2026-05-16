@@ -523,6 +523,74 @@ body.theme-light .last-train-row { background: rgba(20, 20, 30, 0.025); }
 }
 
 /* ============================================================
+   Perturbations & travaux
+   ============================================================ */
+.card--hidden { display: none; }
+
+.disr-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 14px 0 8px;
+  padding-left: 2px;
+}
+.disr-section-label:first-child { margin-top: 0; }
+
+.disr-section-label--active { color: var(--danger); }
+
+.disr-row {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 6px;
+}
+body.theme-light .disr-row { background: rgba(20, 20, 30, 0.025); }
+
+.disr-row__line {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #fff;
+  flex-shrink: 0;
+}
+.disr-row__line--j { background: #CDCD41; color: #1A1A2E; }  /* Transilien J — yellow-green per RATP/SNCF map */
+.disr-row__line--a { background: #F94B0C; color: #fff; }   /* RER A — red */
+
+.disr-row__body { min-width: 0; }
+
+.disr-row__text {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.disr-row__period {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 5px;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
    AI watch
    ============================================================ */
 .ai-filters {

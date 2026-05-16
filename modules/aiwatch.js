@@ -1,4 +1,4 @@
-import { getSettings, cacheGet, cacheSet, cacheBust, markAiRead, isAiRead, setAiSearch, getAiSearch } from './state.js';
+import { getSettings, cacheGet, cacheSet, cacheBust, markAiRead, isAiRead, setFeedSearch, getFeedSearch } from './state.js';
 import { ICONS } from './icons.js';
 import { escapeHTML, fetchWithTimeout, timeAgo, haptic, debounce } from './util.js';
 
@@ -6,15 +6,18 @@ const CACHE_TTL = 10 * 60 * 1000;
 const HN_API = 'https://hn.algolia.com/api/v1/search_by_date';
 const RSS2JSON = 'https://api.rss2json.com/v1/api.json';
 
-const HN_DEFAULT_QUERY = 'AI OR LLM OR GPT OR Claude OR Anthropic OR OpenAI';
+const HN_DEFAULT_QUERIES = {
+  ai:   'AI OR LLM OR GPT OR Claude OR Anthropic OR OpenAI',
+  tech: 'show OR launch OR open source OR developer',
+};
 
 function stripHTML(html) {
   if (!html) return '';
   return html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
 }
 
-async function fetchHN(searchQuery) {
-  const q = searchQuery && searchQuery.trim() ? searchQuery.trim() : HN_DEFAULT_QUERY;
+async function fetchHN(category, searchQuery) {
+  const q = searchQuery && searchQuery.trim() ? searchQuery.trim() : (HN_DEFAULT_QUERIES[category] || HN_DEFAULT_QUERIES.ai);
   const sevenDaysAgo = Math.floor((Date.now() - 14 * 86400 * 1000) / 1000);
   const url = `${HN_API}?query=${encodeURIComponent(q)}&tags=story&hitsPerPage=25&numericFilters=created_at_i>${sevenDaysAgo},points>3`;
   const resp = await fetchWithTimeout(url, {}, 7000);
@@ -48,14 +51,14 @@ async function fetchRSS(src) {
   }));
 }
 
-async function fetchAll(searchQuery) {
-  const cacheKey = searchQuery ? `aiwatch_search_${searchQuery}` : 'aiwatch';
+async function fetchAll(category, searchQuery) {
+  const cacheKey = searchQuery ? `feed_${category}_search_${searchQuery}` : `feed_${category}`;
   const cached = cacheGet(cacheKey, CACHE_TTL);
   if (cached) return cached.map(it => ({ ...it, date: new Date(it.date) }));
 
-  const sources = getSettings().aiSources.filter(s => s.enabled);
+  const sources = getSettings().aiSources.filter(s => s.enabled && (s.category || 'ai') === category);
   const promises = sources.map(s => {
-    if (s.type === 'hn-algolia') return fetchHN(searchQuery).catch(() => []);
+    if (s.type === 'hn-algolia') return fetchHN(category, searchQuery).catch(() => []);
     if (s.type === 'rss') return fetchRSS(s).catch(() => []);
     return Promise.resolve([]);
   });
@@ -71,17 +74,16 @@ async function fetchAll(searchQuery) {
     return true;
   });
 
-  // Apply local search filter on title/summary for RSS sources (HN already filtered server-side)
+  // Local title/summary filter for search
   if (searchQuery && searchQuery.trim()) {
     const q = searchQuery.toLowerCase();
     items = items.filter(it =>
-      it.sourceId === 'hn' || // HN search was server-side
+      it.sourceId === 'hn' ||
       (it.title && it.title.toLowerCase().includes(q)) ||
       (it.summary && it.summary.toLowerCase().includes(q))
     );
   }
 
-  // Filter out items older than 30 days
   const cutoff = Date.now() - 30 * 86400 * 1000;
   items = items.filter(it => it.date.getTime() > cutoff);
 
@@ -109,18 +111,19 @@ function renderItem(item) {
   `;
 }
 
-export class AiWatchWidget {
-  constructor(container) {
+export class FeedWidget {
+  constructor(container, opts = {}) {
     this.container = container;
+    this.category = opts.category || 'ai';
+    this.title = opts.title || (this.category === 'ai' ? 'Veille IA' : 'Veille tech');
+    this.placeholder = opts.placeholder || 'Rechercher un mot-clé…';
     this.container.classList.add('card');
     this.items = [];
-    this.filter = null;             // sourceId filter (chip)
-    this.langFilter = null;         // 'fr' | 'en' | null
-    this.searchInput = '';
+    this.filter = null;
+    this.langFilter = null;
+    this.searchInput = getFeedSearch(this.category);
     this.render();
     this.attach();
-    // Restore search from state
-    this.searchInput = getAiSearch();
     const sEl = this.container.querySelector('[data-ai-search]');
     if (sEl) sEl.value = this.searchInput;
     this.refresh();
@@ -130,7 +133,7 @@ export class AiWatchWidget {
     this.container.innerHTML = `
       <div class="card__head">
         <div class="card__head-main">
-          <span class="card__title">Veille IA</span>
+          <span class="card__title">${escapeHTML(this.title)}</span>
           <span class="card__subtitle"></span>
         </div>
         <div class="card__actions">
@@ -139,7 +142,7 @@ export class AiWatchWidget {
       </div>
       <div class="ai-search-row">
         <span class="ai-search-row__icon">${ICONS.search}</span>
-        <input class="ai-search" type="search" placeholder="Rechercher un mot-clé…" data-ai-search>
+        <input class="ai-search" type="search" placeholder="${escapeHTML(this.placeholder)}" data-ai-search>
       </div>
       <div class="ai-filters" data-filters></div>
       <div data-list><div class="card__loading">Chargement…</div></div>
@@ -151,8 +154,8 @@ export class AiWatchWidget {
       if (e.target.closest('[data-action="refresh"]')) {
         e.stopPropagation();
         haptic(6);
-        cacheBust('aiwatch');
-        if (this.searchInput) cacheBust(`aiwatch_search_${this.searchInput}`);
+        cacheBust(`feed_${this.category}`);
+        if (this.searchInput) cacheBust(`feed_${this.category}_search_${this.searchInput}`);
         this.refresh();
         return;
       }
@@ -177,11 +180,10 @@ export class AiWatchWidget {
       }
     });
 
-    // Search input with debounce
     const searchEl = this.container.querySelector('[data-ai-search]');
     searchEl.addEventListener('input', debounce((e) => {
       this.searchInput = e.target.value.trim();
-      setAiSearch(this.searchInput);
+      setFeedSearch(this.category, this.searchInput);
       this.refresh();
     }, 400));
   }
@@ -204,7 +206,6 @@ export class AiWatchWidget {
     }
     const sources = getSettings().aiSources.filter(s => sourceCounts[s.id]);
 
-    // Build chips: language toggle + source filters
     let chips = '';
     if (langCounts.fr > 0 && langCounts.en > 0) {
       chips += `<button class="ai-chip ${this.langFilter === 'fr' ? 'ai-chip--active' : ''}" data-chip="fr" data-chip-type="lang" type="button">FR (${langCounts.fr})</button>`;
@@ -231,18 +232,23 @@ export class AiWatchWidget {
     listEl.innerHTML = '<div class="card__loading">Chargement…</div>';
     this.setSubtitle('chargement…');
     try {
-      this.items = await fetchAll(this.searchInput);
+      this.items = await fetchAll(this.category, this.searchInput);
       this.renderItems();
       if (this.items.length > 0) {
         const fresh = this.items[0];
-        const label = this.searchInput ? `« ${this.searchInput} » · ${this.items.length} résultats` : `${this.items.length} articles · dernier ${timeAgo(fresh.date)}`;
+        const label = this.searchInput
+          ? `« ${this.searchInput} » · ${this.items.length} résultats`
+          : `${this.items.length} articles · dernier ${timeAgo(fresh.date)}`;
         this.setSubtitle(label);
       } else {
         this.setSubtitle(this.searchInput ? 'aucun résultat' : 'aucun article récent');
       }
     } catch (e) {
-      listEl.innerHTML = `<div class="card__error">Impossible de charger la veille (${escapeHTML(e.message || 'erreur')}).</div>`;
+      listEl.innerHTML = `<div class="card__error">Impossible de charger (${escapeHTML(e.message || 'erreur')}).</div>`;
       this.setSubtitle('erreur');
     }
   }
 }
+
+// Backward-compatible alias
+export const AiWatchWidget = FeedWidget;

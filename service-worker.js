@@ -1,4 +1,4 @@
-const CACHE = 'cockpit-v5';
+const CACHE = 'cockpit-v6';
 const ASSETS = [
   './',
   './index.html',
@@ -17,6 +17,7 @@ const ASSETS = [
   './modules/aiwatch.js',
   './modules/calendar.js',
   './modules/bins.js',
+  './modules/pharmacies.js',
   './modules/settings.js',
   './icons/icon.svg',
 ];
@@ -46,7 +47,8 @@ self.addEventListener('fetch', (e) => {
    || url.hostname.includes('data.economie.gouv.fr')
    || url.hostname.includes('air-quality-api.open-meteo.com')
    || url.hostname.includes('googleapis.com')
-   || url.hostname.includes('accounts.google.com')) {
+   || url.hostname.includes('accounts.google.com')
+   || url.hostname.includes('overpass-api.de')) {
     e.respondWith(fetch(req).catch(() => caches.match(req)));
     return;
   }

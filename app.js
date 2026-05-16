@@ -3,12 +3,13 @@ import { formatDateLong, haptic } from './modules/util.js';
 import { getSettings, updateSettings } from './modules/state.js';
 import { renderHeaderWeather } from './modules/weather.js';
 import { TrainsWidget } from './modules/trains.js';
-import { AiWatchWidget } from './modules/aiwatch.js';
+import { FeedWidget } from './modules/aiwatch.js';
 import { GasWidget } from './modules/gas.js';
 import { WeatherCard } from './modules/weatherCard.js';
 import { AirQualityWidget } from './modules/airquality.js';
 import { CalendarWidget } from './modules/calendar.js';
 import { BinsWidget } from './modules/bins.js';
+import { PharmaciesWidget } from './modules/pharmacies.js';
 import { SettingsPanel } from './modules/settings.js';
 
 // ---------- Theme ----------
@@ -80,15 +81,17 @@ function initTabs() {
 const widgets = {};
 
 function mountWidgets() {
-  widgets.gas         = new GasWidget(document.querySelector('[data-widget="gas"]'));
   widgets.weatherCard = new WeatherCard(document.querySelector('[data-widget="weatherCard"]'));
-  widgets.air         = new AirQualityWidget(document.querySelector('[data-widget="air"]'));
+  widgets.gas         = new GasWidget(document.querySelector('[data-widget="gas"]'));
+  widgets.pharmacies  = new PharmaciesWidget(document.querySelector('[data-widget="pharmacies"]'));
   widgets.bins        = new BinsWidget(document.querySelector('[data-widget="bins"]'));
+  widgets.air         = new AirQualityWidget(document.querySelector('[data-widget="air"]'));
 
   widgets.trainsAller  = new TrainsWidget(document.querySelector('[data-widget="trains-aller"]'), 'aller');
   widgets.trainsRetour = new TrainsWidget(document.querySelector('[data-widget="trains-retour"]'), 'retour');
   widgets.calendar     = new CalendarWidget(document.querySelector('[data-widget="calendar"]'));
-  widgets.aiwatch      = new AiWatchWidget(document.querySelector('[data-widget="aiwatch"]'));
+  widgets.aiwatch      = new FeedWidget(document.querySelector('[data-widget="aiwatch"]'), { category: 'ai', title: 'Veille IA' });
+  widgets.techwatch    = new FeedWidget(document.querySelector('[data-widget="techwatch"]'), { category: 'tech', title: 'Veille tech' });
 }
 
 // ---------- Settings ----------

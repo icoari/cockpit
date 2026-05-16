@@ -1371,3 +1371,181 @@ body.theme-light .event { background: rgba(20, 20, 30, 0.03); }
   font-variant-numeric: tabular-nums;
   font-size: 12px;
 }
+
+.bins-hero__date {
+  font-size: 13px;
+  color: var(--text);
+  margin-top: 4px;
+  text-transform: lowercase;
+}
+.bins-hero__date::first-letter { text-transform: uppercase; }
+
+/* ============================================================
+   Collectes (toutes — OM, tri, encombrants, verre)
+   ============================================================ */
+.collecte-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.collecte-section { display: flex; flex-direction: column; gap: 6px; }
+
+.collecte-section__title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 4px;
+  padding-left: 2px;
+}
+
+.collecte-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 4px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.collecte-row:last-child { border-bottom: none; }
+
+.collecte-row__day {
+  color: var(--text);
+  text-transform: lowercase;
+  letter-spacing: -0.01em;
+}
+.collecte-row__day::first-letter { text-transform: uppercase; }
+
+.collecte-row__when {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+}
+
+/* ============================================================
+   Weather UV / sunrise / sunset
+   ============================================================ */
+.weather-extras {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.weather-extra {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+body.theme-light .weather-extra { background: rgba(20, 20, 30, 0.025); }
+
+.weather-extra__label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.weather-extra__value {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.weather-extra__value small {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-faint);
+  margin-left: 1px;
+  letter-spacing: 0;
+}
+
+.weather-extra__sub {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: lowercase;
+}
+
+.uv--low       .weather-extra__value { color: var(--success); }
+.uv--med       .weather-extra__value { color: var(--accent); }
+.uv--med-high  .weather-extra__value { color: var(--warning); }
+.uv--high      .weather-extra__value { color: var(--danger); }
+
+/* ============================================================
+   Pharmacies
+   ============================================================ */
+.pharma-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pharma-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: inherit;
+  transition: all 160ms var(--ease);
+}
+body.theme-light .pharma-row { background: rgba(20, 20, 30, 0.02); }
+
+.pharma-row:hover { background: var(--surface-hover); transform: translateY(-1px); }
+
+.pharma-row__info { flex: 1; min-width: 0; }
+
+.pharma-row__name {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+
+.pharma-row__sub {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 3px;
+}
+
+.pharma-row__status {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 9px;
+  border-radius: 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pharma-status--open    { background: var(--accent-soft); color: var(--accent); }
+.pharma-status--soon    { background: var(--warning-soft); color: var(--warning); }
+.pharma-status--closed  { background: rgba(255,255,255,0.04); color: var(--text-faint); }
+.pharma-status--unknown { background: rgba(255,255,255,0.04); color: var(--text-faint); }
+body.theme-light .pharma-status--closed,
+body.theme-light .pharma-status--unknown { background: rgba(20,20,30,0.04); }
+
+.pharma-foot {
+  margin-top: 12px;
+  text-align: center;
+  font-size: 12px;
+}

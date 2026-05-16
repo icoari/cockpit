@@ -26,24 +26,29 @@ const DEFAULT_SETTINGS = {
   },
   theme: 'auto',  // auto | dark | light
   aiSources: [
-    // English
-    { id: 'hn',          name: 'Hacker News',     enabled: true,  type: 'hn-algolia',  lang: 'en' },
-    { id: 'openai',      name: 'OpenAI',          enabled: true,  type: 'rss', url: 'https://openai.com/news/rss.xml', lang: 'en' },
-    { id: 'deepmind',    name: 'Google DeepMind', enabled: true,  type: 'rss', url: 'https://deepmind.google/blog/rss.xml', lang: 'en' },
-    { id: 'hf',          name: 'Hugging Face',    enabled: true,  type: 'rss', url: 'https://huggingface.co/blog/feed.xml', lang: 'en' },
-    { id: 'google-ai',   name: 'Google AI',       enabled: true,  type: 'rss', url: 'https://blog.google/technology/ai/rss/', lang: 'en' },
-    { id: 'simonw',      name: 'Simon Willison',  enabled: true,  type: 'rss', url: 'https://simonwillison.net/atom/everything/', lang: 'en' },
-    { id: 'lesswrong',   name: 'LessWrong',       enabled: false, type: 'rss', url: 'https://www.lesswrong.com/feed.xml', lang: 'en' },
-    { id: 'techcrunch',  name: 'TechCrunch AI',   enabled: false, type: 'rss', url: 'https://techcrunch.com/category/artificial-intelligence/feed/', lang: 'en' },
-    { id: 'theverge',    name: 'The Verge',       enabled: false, type: 'rss', url: 'https://www.theverge.com/rss/index.xml', lang: 'en' },
-    // French
-    { id: 'numerama',    name: 'Numerama',        enabled: true,  type: 'rss', url: 'https://www.numerama.com/feed/', lang: 'fr' },
-    { id: 'frandroid',   name: 'Frandroid',       enabled: true,  type: 'rss', url: 'https://www.frandroid.com/feed', lang: 'fr' },
-    { id: 'siecle',      name: 'Siècle Digital',  enabled: true,  type: 'rss', url: 'https://siecledigital.fr/feed/', lang: 'fr' },
-    { id: 'maddyness',   name: 'Maddyness',       enabled: false, type: 'rss', url: 'https://www.maddyness.com/feed/', lang: 'fr' },
-    { id: 'korben',      name: 'Korben',          enabled: false, type: 'rss', url: 'https://korben.info/feed', lang: 'fr' },
-    { id: 'actuia',      name: 'ActuIA',          enabled: false, type: 'rss', url: 'https://www.actuia.com/feed/', lang: 'fr' },
-    { id: 'jdn',         name: 'Journal du Net',  enabled: false, type: 'rss', url: 'https://www.journaldunet.com/rss/', lang: 'fr' },
+    // English — IA
+    { id: 'hn',          name: 'Hacker News',     enabled: true,  type: 'hn-algolia',  lang: 'en', category: 'ai' },
+    { id: 'openai',      name: 'OpenAI',          enabled: true,  type: 'rss', url: 'https://openai.com/news/rss.xml', lang: 'en', category: 'ai' },
+    { id: 'deepmind',    name: 'Google DeepMind', enabled: true,  type: 'rss', url: 'https://deepmind.google/blog/rss.xml', lang: 'en', category: 'ai' },
+    { id: 'hf',          name: 'Hugging Face',    enabled: true,  type: 'rss', url: 'https://huggingface.co/blog/feed.xml', lang: 'en', category: 'ai' },
+    { id: 'google-ai',   name: 'Google AI',       enabled: true,  type: 'rss', url: 'https://blog.google/technology/ai/rss/', lang: 'en', category: 'ai' },
+    { id: 'simonw',      name: 'Simon Willison',  enabled: true,  type: 'rss', url: 'https://simonwillison.net/atom/everything/', lang: 'en', category: 'ai' },
+    { id: 'lesswrong',   name: 'LessWrong',       enabled: false, type: 'rss', url: 'https://www.lesswrong.com/feed.xml', lang: 'en', category: 'ai' },
+    { id: 'techcrunch',  name: 'TechCrunch AI',   enabled: false, type: 'rss', url: 'https://techcrunch.com/category/artificial-intelligence/feed/', lang: 'en', category: 'ai' },
+    // French — IA
+    { id: 'actuia',      name: 'ActuIA',          enabled: true,  type: 'rss', url: 'https://www.actuia.com/feed/', lang: 'fr', category: 'ai' },
+    // French — Tech non-IA
+    { id: 'numerama',    name: 'Numerama',        enabled: true,  type: 'rss', url: 'https://www.numerama.com/feed/', lang: 'fr', category: 'tech' },
+    { id: 'frandroid',   name: 'Frandroid',       enabled: true,  type: 'rss', url: 'https://www.frandroid.com/feed', lang: 'fr', category: 'tech' },
+    { id: 'siecle',      name: 'Siècle Digital',  enabled: true,  type: 'rss', url: 'https://siecledigital.fr/feed/', lang: 'fr', category: 'tech' },
+    { id: 'korben',      name: 'Korben',          enabled: true,  type: 'rss', url: 'https://korben.info/feed', lang: 'fr', category: 'tech' },
+    { id: 'nextink',     name: 'Next',            enabled: false, type: 'rss', url: 'https://next.ink/feed/', lang: 'fr', category: 'tech' },
+    { id: 'jdg',         name: 'Journal du Geek', enabled: false, type: 'rss', url: 'https://www.journaldugeek.com/feed/', lang: 'fr', category: 'tech' },
+    { id: 'lmi',         name: 'Le Monde Informatique', enabled: false, type: 'rss', url: 'https://www.lemondeinformatique.fr/flux-rss/rss.xml', lang: 'fr', category: 'tech' },
+    { id: 'clubic',      name: 'Clubic',          enabled: false, type: 'rss', url: 'https://www.clubic.com/feed/news.rss', lang: 'fr', category: 'tech' },
+    // English — Tech général
+    { id: 'theverge',    name: 'The Verge',       enabled: false, type: 'rss', url: 'https://www.theverge.com/rss/index.xml', lang: 'en', category: 'tech' },
+    { id: 'arstechnica', name: 'Ars Technica',    enabled: false, type: 'rss', url: 'https://feeds.arstechnica.com/arstechnica/index', lang: 'en', category: 'tech' },
   ],
   calendar: {
     clientId: '',
@@ -51,9 +56,18 @@ const DEFAULT_SETTINGS = {
     token: null,
   },
   encombrants: {
-    pattern: 'monthly-2nd-tuesday',   // 'monthly-2nd-tuesday' | 'monthly-1st-thursday-quarter' | 'monthly-3rd-thursday-quarter' | 'manual'
-    extraDates: [],                    // manual extra dates (ISO strings)
+    pattern: 'monthly-2nd-tuesday',
+    extraDates: [],
     address: 'Résidence le Castelet, Conflans-Sainte-Honorine',
+  },
+  collectes: {
+    // Each: enabled (bool), pattern (string), label (string)
+    ordures:    { enabled: true, pattern: 'weekly-friday',    label: 'Ordures ménagères' },
+    tri:        { enabled: true, pattern: 'weekly-wednesday', label: 'Tri sélectif' },
+    verre:      { enabled: false, pattern: 'monthly-1st-tuesday', label: 'Verre' },
+  },
+  pharmacies: {
+    radiusKm: 3,
   },
   activeTab: 'perso',
 };
@@ -62,7 +76,7 @@ const DEFAULT_STATE = {
   version: 3,
   settings: DEFAULT_SETTINGS,
   aiRead: {},
-  aiSearch: '',
+  feedSearch: {},   // { ai: '...', tech: '...' }
   cache: {},
 };
 
@@ -111,8 +125,12 @@ export function updateSettings(patch) {
 // AI watch
 export function markAiRead(url) { state.aiRead[url] = true; save(); }
 export function isAiRead(url) { return !!state.aiRead[url]; }
-export function setAiSearch(q) { state.aiSearch = q || ''; save(); }
-export function getAiSearch() { return state.aiSearch || ''; }
+export function setFeedSearch(category, q) {
+  if (!state.feedSearch) state.feedSearch = {};
+  state.feedSearch[category] = q || '';
+  save();
+}
+export function getFeedSearch(category) { return state.feedSearch?.[category] || ''; }
 
 // AI sources CRUD
 export function addAiSource(name, url, lang = 'en') {

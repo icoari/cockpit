@@ -8,7 +8,7 @@ async function fetchForecast() {
   const cached = cacheGet('weatherCard', CACHE_TTL);
   if (cached) return cached;
   const { lat, lon } = getSettings().location;
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,is_day,wind_speed_10m,relative_humidity_2m&hourly=temperature_2m,precipitation_probability,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=Europe%2FParis&forecast_days=3`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,is_day,wind_speed_10m,relative_humidity_2m,uv_index&hourly=temperature_2m,precipitation_probability,weather_code,is_day,uv_index&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code,uv_index_max,sunrise,sunset&timezone=Europe%2FParis&forecast_days=3`;
   const resp = await fetchWithTimeout(url, {}, 6000);
   if (!resp.ok) throw new Error(`Météo : HTTP ${resp.status}`);
   const data = await resp.json();
@@ -150,8 +150,12 @@ export class WeatherCard {
       const t = Math.round(data.current.temperature_2m);
       const wind = Math.round(data.current.wind_speed_10m);
       const humidity = data.current.relative_humidity_2m;
+      const uv = Math.round(data.current.uv_index ?? 0);
+      const uvMax = Math.round(data.daily?.uv_index_max?.[0] ?? uv);
       const rain = rainSummary(data.hourly);
       const label = weatherCodeLabel(code);
+      const sunrise = data.daily?.sunrise?.[0] ? new Date(data.daily.sunrise[0]) : null;
+      const sunset  = data.daily?.sunset?.[0]  ? new Date(data.daily.sunset[0])  : null;
 
       const dailyHtml = (data.daily.time || []).slice(0, 3).map((_, i) => renderDailyRow(data.daily, i)).join('');
       const chartHtml = renderHourlyChart(data.hourly);
@@ -159,6 +163,10 @@ export class WeatherCard {
       const rainAlert = rain.rain
         ? `<div class="weather-alert">Pluie probable vers ${rain.when} (${rain.prob}%)</div>`
         : '';
+
+      const uvLabel = uv >= 11 ? 'extrême' : uv >= 8 ? 'très élevé' : uv >= 6 ? 'élevé' : uv >= 3 ? 'modéré' : 'faible';
+      const uvCls   = uv >= 8 ? 'uv--high' : uv >= 6 ? 'uv--med-high' : uv >= 3 ? 'uv--med' : 'uv--low';
+      const fmtTime = (d) => d ? d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—';
 
       body.innerHTML = `
         <div class="weather-current">
@@ -170,6 +178,21 @@ export class WeatherCard {
           <div class="weather-current__stats">
             <div>vent <strong>${wind} km/h</strong></div>
             <div>humid. <strong>${humidity}%</strong></div>
+          </div>
+        </div>
+        <div class="weather-extras">
+          <div class="weather-extra ${uvCls}">
+            <span class="weather-extra__label">UV</span>
+            <span class="weather-extra__value">${uv}<small>/${uvMax}</small></span>
+            <span class="weather-extra__sub">${uvLabel}</span>
+          </div>
+          <div class="weather-extra">
+            <span class="weather-extra__label">Lever</span>
+            <span class="weather-extra__value">${fmtTime(sunrise)}</span>
+          </div>
+          <div class="weather-extra">
+            <span class="weather-extra__label">Coucher</span>
+            <span class="weather-extra__value">${fmtTime(sunset)}</span>
           </div>
         </div>
         ${rainAlert}

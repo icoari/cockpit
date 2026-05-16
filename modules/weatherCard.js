@@ -150,8 +150,10 @@ export class WeatherCard {
       const t = Math.round(data.current.temperature_2m);
       const wind = Math.round(data.current.wind_speed_10m);
       const humidity = data.current.relative_humidity_2m;
-      const uv = Math.round(data.current.uv_index ?? 0);
-      const uvMax = Math.round(data.daily?.uv_index_max?.[0] ?? uv);
+      const uvMaxRaw = data.daily?.uv_index_max?.[0] ?? data.current.uv_index ?? 0;
+      const uvMax = Math.round(uvMaxRaw * 10) / 10;
+      // Note: Open-Meteo uv_index is the clear-sky theoretical UV — it does NOT
+      // factor in cloud cover. We expose only the daily max with that caveat.
       const rain = rainSummary(data.hourly);
       const label = weatherCodeLabel(code);
       const sunrise = data.daily?.sunrise?.[0] ? new Date(data.daily.sunrise[0]) : null;
@@ -164,8 +166,8 @@ export class WeatherCard {
         ? `<div class="weather-alert">Pluie probable vers ${rain.when} (${rain.prob}%)</div>`
         : '';
 
-      const uvLabel = uv >= 11 ? 'extrême' : uv >= 8 ? 'très élevé' : uv >= 6 ? 'élevé' : uv >= 3 ? 'modéré' : 'faible';
-      const uvCls   = uv >= 8 ? 'uv--high' : uv >= 6 ? 'uv--med-high' : uv >= 3 ? 'uv--med' : 'uv--low';
+      const uvLabel = uvMax >= 11 ? 'extrême' : uvMax >= 8 ? 'très élevé' : uvMax >= 6 ? 'élevé' : uvMax >= 3 ? 'modéré' : 'faible';
+      const uvCls   = uvMax >= 8 ? 'uv--high' : uvMax >= 6 ? 'uv--med-high' : uvMax >= 3 ? 'uv--med' : 'uv--low';
       const fmtTime = (d) => d ? d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—';
 
       body.innerHTML = `
@@ -182,9 +184,9 @@ export class WeatherCard {
         </div>
         <div class="weather-extras">
           <div class="weather-extra ${uvCls}">
-            <span class="weather-extra__label">UV</span>
-            <span class="weather-extra__value">${uv}<small>/${uvMax}</small></span>
-            <span class="weather-extra__sub">${uvLabel}</span>
+            <span class="weather-extra__label">UV max</span>
+            <span class="weather-extra__value">${uvMax.toFixed(1)}</span>
+            <span class="weather-extra__sub">${uvLabel} · ciel clair</span>
           </div>
           <div class="weather-extra">
             <span class="weather-extra__label">Lever</span>

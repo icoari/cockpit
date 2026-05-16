@@ -1,6 +1,7 @@
 import {
   getSettings, save,
   addAiSource, toggleAiSource, removeAiSource,
+  addYoutubeChannel, toggleYoutubeChannel, removeYoutubeChannel,
   addEncombrantDate, removeEncombrantDate, setEncombrantPattern,
   exportData, importData, resetAll,
 } from './state.js';
@@ -98,7 +99,38 @@ export class SettingsPanel {
       </div>
 
       <div class="settings-section">
-        <div class="settings-section__title">Sources veille IA</div>
+        <div class="settings-section__title">Chaînes YouTube</div>
+        <div class="settings-section__desc">
+          Tu trouves le Channel ID dans l'URL d'une chaîne (clique "voir le code source" et cherche "channelId").
+          Format : commence par <code>UC</code> suivi de 22 caractères.
+        </div>
+        <div class="crud-list">
+          ${(s.youtube?.channels || []).map(c => `
+            <div class="crud-item">
+              <label class="label-row" style="margin:0">
+                <input type="checkbox" data-toggle-yt="${c.id}" ${c.enabled ? 'checked' : ''}>
+              </label>
+              <div class="crud-item__main">
+                <span class="crud-item__name">${escapeHTML(c.name)} ${c.lang === 'fr' ? '<small style="color:var(--accent);font-weight:600">FR</small>' : ''}</span>
+                <span class="crud-item__sub">${escapeHTML(c.channelId)}</span>
+              </div>
+              <button class="crud-item__action" data-remove-yt="${c.id}" type="button">supprimer</button>
+            </div>
+          `).join('')}
+        </div>
+        <div class="btn-row" style="margin-top:8px">
+          <input class="input" type="text" placeholder="Nom de la chaîne" data-new-yt-name style="flex:1;margin:0">
+          <input class="input" type="text" placeholder="Channel ID (UC…)" data-new-yt-id style="flex:1;margin:0">
+          <select class="input" data-new-yt-lang style="flex:0 0 80px;margin:0">
+            <option value="en">EN</option>
+            <option value="fr">FR</option>
+          </select>
+          <button class="btn btn--ghost" type="button" data-action="add-yt">Ajouter</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section__title">Sources veille tech (RSS)</div>
         <div class="settings-section__desc">Active les sources de ton choix. Les flux RSS passent par rss2json (gratuit).</div>
         <div class="crud-list">
           ${s.aiSources.map(src => `
@@ -173,6 +205,13 @@ export class SettingsPanel {
         if (name && url) { addAiSource(name, url); this.render(); this.onChange(); }
         return;
       }
+      if (action === 'add-yt') {
+        const name = this.root.querySelector('[data-new-yt-name]').value.trim();
+        const cid  = this.root.querySelector('[data-new-yt-id]').value.trim();
+        const lang = this.root.querySelector('[data-new-yt-lang]').value;
+        if (name && cid) { addYoutubeChannel(name, cid, lang); this.render(); this.onChange(); }
+        return;
+      }
       if (action === 'add-bin') {
         const date = this.root.querySelector('[data-new-bin-date]').value;
         if (date) { addEncombrantDate(date); this.render(); this.onChange(); }
@@ -209,6 +248,9 @@ export class SettingsPanel {
       const removeAiId = e.target.closest('[data-remove-ai]')?.dataset.removeAi;
       if (removeAiId) { removeAiSource(removeAiId); this.render(); this.onChange(); return; }
 
+      const removeYtId = e.target.closest('[data-remove-yt]')?.dataset.removeYt;
+      if (removeYtId) { removeYoutubeChannel(removeYtId); this.render(); this.onChange(); return; }
+
       const removeBinDate = e.target.closest('[data-remove-bin]')?.dataset.removeBin;
       if (removeBinDate) { removeEncombrantDate(removeBinDate); this.render(); this.onChange(); return; }
     });
@@ -216,6 +258,9 @@ export class SettingsPanel {
     this.root.addEventListener('change', (e) => {
       const tgl = e.target.closest('[data-toggle-ai]');
       if (tgl) { toggleAiSource(tgl.dataset.toggleAi); this.onChange(); return; }
+
+      const ytTgl = e.target.closest('[data-toggle-yt]');
+      if (ytTgl) { toggleYoutubeChannel(ytTgl.dataset.toggleYt); this.onChange(); return; }
 
       const file = e.target.closest('[data-import-file]');
       if (file && file.files[0]) {

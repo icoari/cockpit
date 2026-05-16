@@ -69,6 +69,27 @@ const DEFAULT_SETTINGS = {
   pharmacies: {
     radiusKm: 3,
   },
+  youtube: {
+    channels: [
+      // English — actu IA / tech
+      { id: 'tmp',      channelId: 'UCbfYPyITQ-7l4upoX8nvctg', name: 'Two Minute Papers', enabled: true, lang: 'en' },
+      { id: 'aigrid',   channelId: 'UCSPkiRjFYpz-8DY-aF_1wRg', name: 'The AI Grid',       enabled: true, lang: 'en' },
+      { id: 'yk',       channelId: 'UCHmD-oSpV0sNfAUnpYpj8KA', name: 'Yannic Kilcher',    enabled: true, lang: 'en' },
+      { id: 'lex',      channelId: 'UCJIfeSCssxSC_Dhc5s7woww', name: 'Lex Fridman',       enabled: true, lang: 'en' },
+      { id: 'fireship', channelId: 'UC2Xd-TjJByJyK2w1zNwY0zQ', name: 'Fireship',          enabled: true, lang: 'en' },
+      // French — actu IA / tech
+      { id: 'underscore', channelId: 'UCWedHS9qKebauVIK2J7383g', name: 'Underscore_',         enabled: true, lang: 'fr' },
+      { id: 'defendia',   channelId: 'UCnEHCrot2HkySxMTmDPhZyg', name: 'Defend Intelligence', enabled: true, lang: 'fr' },
+      { id: 'cocadmin',   channelId: 'UCVRJ6D343dX-x730MRP8tNw', name: 'cocadmin',            enabled: true, lang: 'fr' },
+      { id: 'actutech',   channelId: 'UCTag-fSBSpjH0g3fTUatAfg', name: 'Actu Tech',           enabled: true, lang: 'fr' },
+      { id: 'codevega',   channelId: 'UCglJU3xeXOcq7d3kQP_4BOg', name: 'Code:Vega',           enabled: true, lang: 'fr' },
+      // Optional — disabled by default
+      { id: 'matt-vidpro', channelId: 'UC06GdmaEdCdCFwR3NvszloQ', name: 'Matt VidPro AI', enabled: false, lang: 'en' },
+      { id: '3b1b',        channelId: 'UC1_uAIS3r8Vu6JjXWvastJg', name: '3Blue1Brown',    enabled: false, lang: 'en' },
+      { id: 'sentdex',     channelId: 'UCQALLeQPoZdZC4JNUboVEUg', name: 'Sentdex',        enabled: false, lang: 'en' },
+      { id: 'micode',      channelId: 'UCYnvxJ-PKiGXo_tYXpWAC-w', name: 'Micode (perso)', enabled: false, lang: 'fr' },
+    ],
+  },
   activeTab: 'perso',
 };
 
@@ -85,17 +106,28 @@ let state = load();
 function load() {
   const raw = localStorage.getItem(KEY);
   if (!raw) {
-    // Try migrating from older versions
     const old = localStorage.getItem('cockpit-v2') || localStorage.getItem('cockpit-v1');
     if (old) {
       const parsed = safeJSON(old, null);
-      if (parsed) return mergeDeep(structuredClone(DEFAULT_STATE), parsed);
+      if (parsed) return migrate(mergeDeep(structuredClone(DEFAULT_STATE), parsed));
     }
     return structuredClone(DEFAULT_STATE);
   }
   const parsed = safeJSON(raw, null);
   if (!parsed) return structuredClone(DEFAULT_STATE);
-  return mergeDeep(structuredClone(DEFAULT_STATE), parsed);
+  return migrate(mergeDeep(structuredClone(DEFAULT_STATE), parsed));
+}
+
+// Targeted migrations between schema versions
+function migrate(merged) {
+  // Old YouTube channels (scienceclic/réveilleur/hygiène) → replace with the
+  // new actu tech/IA curated list. Detection by presence of one of the old ids.
+  const oldChannelIds = ['scienceclic', 'reveilleur', 'hygiene'];
+  const channels = merged.settings?.youtube?.channels;
+  if (channels && channels.some(c => oldChannelIds.includes(c.id))) {
+    merged.settings.youtube.channels = structuredClone(DEFAULT_STATE).settings.youtube.channels;
+  }
+  return merged;
 }
 
 function mergeDeep(target, source) {
@@ -143,6 +175,22 @@ export function toggleAiSource(id) {
 }
 export function removeAiSource(id) {
   state.settings.aiSources = state.settings.aiSources.filter(s => s.id !== id);
+  save();
+}
+
+// YouTube channels CRUD
+export function addYoutubeChannel(name, channelId, lang = 'en') {
+  if (!state.settings.youtube) state.settings.youtube = { channels: [] };
+  state.settings.youtube.channels.push({ id: uid(), name: name.trim(), channelId: channelId.trim(), enabled: true, lang });
+  save();
+}
+export function toggleYoutubeChannel(id) {
+  const c = state.settings.youtube?.channels?.find(x => x.id === id);
+  if (c) { c.enabled = !c.enabled; save(); }
+}
+export function removeYoutubeChannel(id) {
+  if (!state.settings.youtube) return;
+  state.settings.youtube.channels = state.settings.youtube.channels.filter(c => c.id !== id);
   save();
 }
 

@@ -4,6 +4,7 @@ import { getSettings, updateSettings } from './modules/state.js';
 import { renderHeaderWeather } from './modules/weather.js';
 import { TrainsWidget } from './modules/trains.js';
 import { FeedWidget } from './modules/aiwatch.js';
+import { YoutubeWidget } from './modules/youtube.js';
 import { GasWidget } from './modules/gas.js';
 import { WeatherCard } from './modules/weatherCard.js';
 import { AirQualityWidget } from './modules/airquality.js';
@@ -82,6 +83,7 @@ const widgets = {};
 
 function mountWidgets() {
   widgets.weatherCard = new WeatherCard(document.querySelector('[data-widget="weatherCard"]'));
+  widgets.calendar    = new CalendarWidget(document.querySelector('[data-widget="calendar"]'));
   widgets.gas         = new GasWidget(document.querySelector('[data-widget="gas"]'));
   widgets.pharmacies  = new PharmaciesWidget(document.querySelector('[data-widget="pharmacies"]'));
   widgets.bins        = new BinsWidget(document.querySelector('[data-widget="bins"]'));
@@ -89,8 +91,7 @@ function mountWidgets() {
 
   widgets.trainsAller  = new TrainsWidget(document.querySelector('[data-widget="trains-aller"]'), 'aller');
   widgets.trainsRetour = new TrainsWidget(document.querySelector('[data-widget="trains-retour"]'), 'retour');
-  widgets.calendar     = new CalendarWidget(document.querySelector('[data-widget="calendar"]'));
-  widgets.aiwatch      = new FeedWidget(document.querySelector('[data-widget="aiwatch"]'), { category: 'ai', title: 'Veille IA' });
+  widgets.youtube      = new YoutubeWidget(document.querySelector('[data-widget="youtube"]'));
   widgets.techwatch    = new FeedWidget(document.querySelector('[data-widget="techwatch"]'), { category: 'tech', title: 'Veille tech' });
 }
 

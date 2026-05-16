@@ -1,9 +1,10 @@
 import {
   getSettings, save,
   addAiSource, toggleAiSource, removeAiSource,
-  addEncombrantDate, removeEncombrantDate,
+  addEncombrantDate, removeEncombrantDate, setEncombrantPattern,
   exportData, importData, resetAll,
 } from './state.js';
+import { ENCOMBRANTS_PATTERNS } from './bins.js';
 import { escapeHTML } from './util.js';
 
 export class SettingsPanel {
@@ -52,10 +53,21 @@ export class SettingsPanel {
 
       <div class="settings-section">
         <div class="settings-section__title">Encombrants — ${escapeHTML(s.encombrants?.address || 'adresse')}</div>
-        <div class="settings-section__desc">Ajoute les prochaines dates de collecte. Tu peux modifier l'adresse affichée ci-dessous.</div>
+        <div class="settings-section__desc">
+          À Conflans-Sainte-Honorine, le calendrier dépend du type de logement.
+          Dépôt la veille à partir de 19h. Renseignements GPSEO : 01 30 33 90 00.
+        </div>
         <input class="input" type="text" placeholder="Adresse" data-field="encombrantsAddress" value="${escapeHTML(s.encombrants?.address || '')}">
+        <label class="label-row" style="display:block;margin-top:6px">Calendrier</label>
+        <select class="input" data-field="encombrantsPattern">
+          ${Object.entries(ENCOMBRANTS_PATTERNS).map(([key, p]) => `
+            <option value="${key}" ${s.encombrants?.pattern === key ? 'selected' : ''}>${escapeHTML(p.label)}</option>
+          `).join('')}
+        </select>
+
+        <label class="label-row" style="display:block;margin-top:14px">Dates supplémentaires (exceptions, vacances…)</label>
         <div class="crud-list">
-          ${(s.encombrants?.nextDates || []).map(d => `
+          ${(s.encombrants?.extraDates || []).map(d => `
             <div class="crud-item">
               <div class="crud-item__main">
                 <span class="crud-item__name">${escapeHTML(new Date(d).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}</span>
@@ -63,7 +75,7 @@ export class SettingsPanel {
               </div>
               <button class="crud-item__action" data-remove-bin="${d}" type="button">supprimer</button>
             </div>
-          `).join('') || '<div class="card__empty" style="padding:8px 0">Aucune date enregistrée.</div>'}
+          `).join('') || '<div class="card__empty" style="padding:6px 0">Aucune date ajoutée.</div>'}
         </div>
         <div class="btn-row">
           <input class="input" type="date" data-new-bin-date style="flex:1;margin:0">
@@ -137,6 +149,7 @@ export class SettingsPanel {
           case 'locLon':             settings.location.lon = parseFloat(v) || 0; break;
           case 'gasRadius':          settings.gas.radiusKm = Math.max(1, parseInt(v, 10) || 8); break;
           case 'encombrantsAddress': settings.encombrants.address = v.trim(); break;
+          case 'encombrantsPattern': settings.encombrants.pattern = v; break;
         }
         save();
         this.onChange();

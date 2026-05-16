@@ -51,7 +51,8 @@ const DEFAULT_SETTINGS = {
     token: null,
   },
   encombrants: {
-    nextDates: [],   // array of ISO date strings ("2026-06-04")
+    pattern: 'monthly-2nd-tuesday',   // 'monthly-2nd-tuesday' | 'monthly-1st-thursday-quarter' | 'monthly-3rd-thursday-quarter' | 'manual'
+    extraDates: [],                    // manual extra dates (ISO strings)
     address: 'Résidence le Castelet, Conflans-Sainte-Honorine',
   },
   activeTab: 'perso',
@@ -130,7 +131,7 @@ export function removeAiSource(id) {
 // Encombrants
 export function addEncombrantDate(dateIso) {
   if (!dateIso) return;
-  const list = state.settings.encombrants.nextDates;
+  const list = state.settings.encombrants.extraDates || (state.settings.encombrants.extraDates = []);
   if (!list.includes(dateIso)) {
     list.push(dateIso);
     list.sort();
@@ -138,7 +139,11 @@ export function addEncombrantDate(dateIso) {
   }
 }
 export function removeEncombrantDate(dateIso) {
-  state.settings.encombrants.nextDates = state.settings.encombrants.nextDates.filter(d => d !== dateIso);
+  state.settings.encombrants.extraDates = (state.settings.encombrants.extraDates || []).filter(d => d !== dateIso);
+  save();
+}
+export function setEncombrantPattern(p) {
+  state.settings.encombrants.pattern = p;
   save();
 }
 

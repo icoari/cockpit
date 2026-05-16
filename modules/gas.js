@@ -48,14 +48,13 @@ export class GasWidget {
   render() {
     const fuel = getSettings().gas.fuel;
     this.container.innerHTML = `
-      <div class="card__head" data-card-toggle>
+      <div class="card__head">
         <div class="card__head-main">
           <span class="card__title">Stations essence</span>
           <span class="card__subtitle"></span>
         </div>
         <div class="card__actions">
           <button class="card__action" data-action="refresh" type="button" aria-label="Rafraîchir">${ICONS.refresh}</button>
-          <span class="card__chevron">${ICONS.chevronDown}</span>
         </div>
       </div>
       <div class="card__body">

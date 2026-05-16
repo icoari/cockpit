@@ -161,14 +161,13 @@ function renderSubtabs(active) {
 function renderShell(direction, activeSubtab, body, subtitle = '') {
   const title = direction === 'aller' ? 'Trains — vers Paris' : 'Trains — retour';
   return `
-    <div class="card__head" data-card-toggle>
+    <div class="card__head">
       <div class="card__head-main">
         <span class="card__title">${escapeHTML(title)}</span>
         ${subtitle ? `<span class="card__subtitle">${escapeHTML(subtitle)}</span>` : ''}
       </div>
       <div class="card__actions">
         <button class="card__action" data-action="refresh" type="button" aria-label="Rafraîchir">${ICONS.refresh}</button>
-        <span class="card__chevron">${ICONS.chevronDown}</span>
       </div>
     </div>
     <div class="card__body">

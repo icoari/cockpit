@@ -9,85 +9,57 @@ import { WeatherCard } from './modules/weatherCard.js';
 import { AirQualityWidget } from './modules/airquality.js';
 import { SettingsPanel } from './modules/settings.js';
 
-// ---------- Header ----------
+// ---------- Page header ----------
 function renderHeader() {
   document.getElementById('dateLabel').textContent = formatDateLong(new Date());
   document.getElementById('settingsBtn').innerHTML = ICONS.settings;
   renderHeaderWeather(
     document.getElementById('weatherIcon'),
+    null,
+    null,
     document.getElementById('weatherTemp'),
-    document.getElementById('weatherRange'),
   );
 }
 
 // ---------- Tabs ----------
 function setActiveTab(name) {
-  const tabs = document.querySelector('.tabs');
-  tabs.dataset.active = name;
-  tabs.querySelectorAll('.tab').forEach(t => {
-    t.classList.toggle('tab--active', t.dataset.tab === name);
+  document.querySelectorAll('.tabbar-btn').forEach(b => {
+    b.classList.toggle('tabbar-btn--active', b.dataset.tab === name);
   });
   document.querySelectorAll('.pane').forEach(p => {
     p.hidden = p.dataset.pane !== name;
   });
+  document.getElementById('pageSection').textContent = name === 'pro' ? 'Pro' : 'Perso';
   updateSettings({ activeTab: name });
+  // Scroll to top of new pane
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function initTabs() {
-  document.querySelectorAll('.tab').forEach(t => {
-    t.addEventListener('click', () => {
+  // Inject SVG icons
+  document.querySelectorAll('[data-icon]').forEach(el => {
+    const name = el.dataset.icon;
+    if (ICONS[name]) el.innerHTML = ICONS[name];
+  });
+
+  document.querySelectorAll('.tabbar-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
       haptic(4);
-      setActiveTab(t.dataset.tab);
+      setActiveTab(btn.dataset.tab);
     });
   });
+
   const saved = getSettings().activeTab || 'perso';
   setActiveTab(saved);
-}
-
-// ---------- Collapsible cards ----------
-function initCollapsibleCards() {
-  // All cards start collapsed (compact)
-  document.querySelectorAll('.widget.card').forEach(card => {
-    card.classList.add('card--compact');
-  });
-
-  // Tap a compact card header → expand
-  document.body.addEventListener('click', (e) => {
-    const toggle = e.target.closest('[data-card-toggle]');
-    if (toggle) {
-      const card = toggle.closest('.card');
-      if (!card) return;
-      // If clicking on an action button inside head, don't toggle
-      if (e.target.closest('[data-action]')) return;
-      haptic(4);
-      card.classList.toggle('card--compact');
-      return;
-    }
-  });
-
-  // Tap outside any expanded card → collapse it
-  document.body.addEventListener('click', (e) => {
-    document.querySelectorAll('.widget.card:not(.card--compact)').forEach(card => {
-      if (card.contains(e.target)) return;
-      // Don't collapse if click is on modal or topbar
-      if (e.target.closest('.modal-backdrop')) return;
-      if (e.target.closest('.topbar')) return;
-      if (e.target.closest('.tabs')) return;
-      card.classList.add('card--compact');
-    });
-  });
 }
 
 // ---------- Widgets ----------
 const widgets = {};
 
 function mountWidgets() {
-  // Perso (life utility) — order matters: most-used first
   widgets.gas         = new GasWidget(document.querySelector('[data-widget="gas"]'));
   widgets.weatherCard = new WeatherCard(document.querySelector('[data-widget="weatherCard"]'));
   widgets.air         = new AirQualityWidget(document.querySelector('[data-widget="air"]'));
-
-  // Pro
   widgets.trainsAller  = new TrainsWidget(document.querySelector('[data-widget="trains-aller"]'), 'aller');
   widgets.trainsRetour = new TrainsWidget(document.querySelector('[data-widget="trains-retour"]'), 'retour');
   widgets.aiwatch      = new AiWatchWidget(document.querySelector('[data-widget="aiwatch"]'));
@@ -122,6 +94,12 @@ function initSettings() {
       panel.open();
     }
   });
+
+  // Weather chip tap → open settings (location config)
+  document.getElementById('weatherMini').addEventListener('click', () => {
+    haptic(4);
+    panel.open();
+  });
 }
 
 // ---------- Lifecycle ----------
@@ -139,7 +117,6 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('focus', refreshLiveData);
 
-// Trains auto-refresh every 90s while open
 setInterval(() => {
   if (!document.hidden) {
     try { widgets.trainsAller?.refresh(); } catch {}
@@ -151,5 +128,4 @@ setInterval(() => {
 renderHeader();
 mountWidgets();
 initTabs();
-initCollapsibleCards();
 initSettings();

@@ -1,4 +1,4 @@
-const CACHE = 'bob-v26';
+const CACHE = 'bob-v27';
 const ASSETS = [
   './',
   './index.html',
@@ -53,7 +53,7 @@ self.addEventListener('fetch', (e) => {
    || url.hostname.includes('googleapis.com')
    || url.hostname.includes('accounts.google.com')
    || url.hostname.includes('overpass-api.de')
-   || url.hostname.includes('corsproxy.io')
+   || url.hostname.includes('codetabs.com')
    || url.hostname.includes('data.iledefrance.fr')
    || url.hostname.includes('youtube.com')
    || url.hostname.includes('ytimg.com')) {

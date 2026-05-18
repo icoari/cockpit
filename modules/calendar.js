@@ -90,6 +90,20 @@ async function fetchEventsRange(timeMinIso, timeMaxIso) {
   return resp.json();
 }
 
+async function deleteEvent(eventId) {
+  const token = await ensureToken();
+  const url = `${calendarUrl()}/${encodeURIComponent(eventId)}`;
+  const resp = await fetchWithTimeout(url, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${token}` },
+  }, 9000);
+  // 204 No Content = success; 410 Gone = already deleted (treat as success)
+  if (resp.status !== 204 && resp.status !== 410) {
+    const txt = await resp.text().catch(() => '');
+    throw new Error(`Suppression échouée (HTTP ${resp.status}) ${txt.slice(0, 120)}`);
+  }
+}
+
 async function createEvent(title, startIso, endIso, colorId) {
   const token = await ensureToken();
   const pad = (n) => String(n).padStart(2, '0');
@@ -312,7 +326,28 @@ export class CalendarWidget {
         this.submitCreate();
         return;
       }
+      const delBtn = e.target.closest('[data-cal-del]');
+      if (delBtn) {
+        e.stopPropagation();
+        haptic(8);
+        this.handleDelete(delBtn.dataset.calDel);
+        return;
+      }
     });
+  }
+
+  async handleDelete(eventId) {
+    const ev = this.events.find(e => e.id === eventId);
+    const title = ev?.summary || 'cet événement';
+    if (!confirm(`Supprimer « ${title} » ?`)) return;
+    try {
+      await deleteEvent(eventId);
+      this.events = this.events.filter(e => e.id !== eventId);
+      haptic(12);
+      this.renderBody();
+    } catch (e) {
+      alert('Échec de la suppression : ' + e.message);
+    }
   }
 
   toggleCreate() {
@@ -530,6 +565,7 @@ export class CalendarWidget {
                   ${spanInfo ? `<div class="event__span">${escapeHTML(spanInfo)}</div>` : ''}
                   ${ev.location ? `<div class="event__location">${escapeHTML(ev.location)}</div>` : ''}
                 </div>
+                <button class="event__del" type="button" data-cal-del="${escapeHTML(ev.id)}" aria-label="Supprimer">${ICONS.trash}</button>
               </div>
             `;
           }).join('')}

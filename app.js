@@ -173,15 +173,18 @@ function openProject(name) {
   };
 
   if (name === 'health') {
-    // Pass current Bob theme so the health-tracker matches (light/dark/auto)
+    // Pass current Bob theme so the health-tracker matches (light/dark/auto).
+    // Add a cache-buster so old SW-cached health-tracker code (without the
+    // theme handler) is forced to refresh on next open.
     const currentTheme = getSettings().theme || 'auto';
+    const cacheBust = Date.now();
     inner.innerHTML = `
       <div class="project-shell">
         <div class="project-bar">
           <button class="project-bar__back" type="button" data-close>← Bob</button>
           <span class="project-bar__title">Suivi santé</span>
         </div>
-        <iframe class="project-frame" src="../health-tracker/?theme=${encodeURIComponent(currentTheme)}" allow="vibrate"></iframe>
+        <iframe class="project-frame" src="../health-tracker/?theme=${encodeURIComponent(currentTheme)}&_v=${cacheBust}" allow="vibrate"></iframe>
       </div>
     `;
     inner.querySelector('[data-close]').addEventListener('click', close);

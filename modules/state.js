@@ -248,14 +248,40 @@ export function cacheBust(key) {
 }
 
 // Export / Import / Reset
-export function exportData() { return JSON.stringify(state, null, 2); }
+const WRITER_KEY = 'bob-writer-v1';
+
+export function exportData() {
+  // Build a clean snapshot:
+  //  - omit calendar OAuth token (security: would leak an active access token)
+  //  - omit volatile cache (recreated on first use)
+  //  - include the writer chapters stored under a separate localStorage key
+  const snapshot = structuredClone(state);
+  if (snapshot.settings?.calendar) snapshot.settings.calendar.token = null;
+  delete snapshot.cache;
+  let writer = null;
+  try {
+    const raw = localStorage.getItem(WRITER_KEY);
+    if (raw) writer = JSON.parse(raw);
+  } catch {}
+  return JSON.stringify({ ...snapshot, _writer: writer }, null, 2);
+}
+
 export function importData(json) {
   const parsed = safeJSON(json, null);
   if (!parsed || typeof parsed !== 'object') throw new Error('JSON invalide');
-  state = mergeDeep(structuredClone(DEFAULT_STATE), parsed);
+  // Pull off the writer payload before merging the rest
+  const writer = parsed._writer;
+  const rest = { ...parsed };
+  delete rest._writer;
+  state = mergeDeep(structuredClone(DEFAULT_STATE), rest);
   save();
+  if (writer && typeof writer === 'object') {
+    try { localStorage.setItem(WRITER_KEY, JSON.stringify(writer)); } catch {}
+  }
 }
+
 export function resetAll() {
   state = structuredClone(DEFAULT_STATE);
   save();
+  try { localStorage.removeItem(WRITER_KEY); } catch {}
 }

@@ -173,13 +173,15 @@ function openProject(name) {
   };
 
   if (name === 'health') {
+    // Pass current Bob theme so the health-tracker matches (light/dark/auto)
+    const currentTheme = getSettings().theme || 'auto';
     inner.innerHTML = `
       <div class="project-shell">
         <div class="project-bar">
           <button class="project-bar__back" type="button" data-close>← Bob</button>
           <span class="project-bar__title">Suivi santé</span>
         </div>
-        <iframe class="project-frame" src="../health-tracker/" allow="vibrate"></iframe>
+        <iframe class="project-frame" src="../health-tracker/?theme=${encodeURIComponent(currentTheme)}" allow="vibrate"></iframe>
       </div>
     `;
     inner.querySelector('[data-close]').addEventListener('click', close);

@@ -13,7 +13,7 @@ function load() {
   } catch { return { chapters: [] }; }
 }
 
-function save(state) {
+function persist(state) {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
 }
 
@@ -38,15 +38,49 @@ export class WriterApp {
     this.state = load();
     this.currentChapterId = null;
     this.persistDebounced = debounce(() => this.save(), 400);
+
+    // Single persistent delegated click handler — survives every re-render
+    this.container.addEventListener('click', (e) => this.handleClick(e));
+
     this.renderList();
   }
 
-  save() {
-    save(this.state);
-  }
+  save() { persist(this.state); }
 
   current() {
     return this.state.chapters.find(c => c.id === this.currentChapterId);
+  }
+
+  handleClick(e) {
+    if (e.target.closest('[data-action="exit"]')) {
+      this.save();
+      this.onExit();
+      return;
+    }
+    if (e.target.closest('[data-action="new"]')) {
+      haptic(8);
+      this.newChapter();
+      return;
+    }
+    if (e.target.closest('[data-action="back"]')) {
+      e.stopPropagation();
+      this.save();
+      this.renderList();
+      return;
+    }
+    const del = e.target.closest('[data-del]');
+    if (del) {
+      e.stopPropagation();
+      haptic(8);
+      this.deleteChapter(del.dataset.del);
+      return;
+    }
+    const open = e.target.closest('[data-open]');
+    if (open) {
+      haptic(4);
+      this.currentChapterId = open.dataset.open;
+      this.renderEditor();
+    }
   }
 
   newChapter() {
@@ -80,7 +114,7 @@ export class WriterApp {
               <div class="writer-item__title">${escapeHTML(c.title)}</div>
               <div class="writer-item__meta">${countWords(c.content)} mots · ${timeAgo(c.updatedAt)}</div>
             </div>
-            <button class="writer-item__del" data-del="${c.id}" aria-label="Supprimer">${ICONS.trash}</button>
+            <span class="writer-item__del" data-del="${c.id}" role="button" aria-label="Supprimer">${ICONS.trash}</span>
           </button>
         `).join('')
       : '<div class="writer-empty">Aucun chapitre. Crée le premier.</div>';
@@ -98,19 +132,6 @@ export class WriterApp {
         </div>
       </div>
     `;
-
-    this.container.addEventListener('click', (e) => {
-      if (e.target.closest('[data-action="exit"]')) { this.onExit(); return; }
-      if (e.target.closest('[data-action="new"]')) { haptic(8); this.newChapter(); return; }
-      const del = e.target.closest('[data-del]');
-      if (del) { e.stopPropagation(); haptic(8); this.deleteChapter(del.dataset.del); return; }
-      const open = e.target.closest('[data-open]');
-      if (open) {
-        haptic(4);
-        this.currentChapterId = open.dataset.open;
-        this.renderEditor();
-      }
-    }, { once: true });
   }
 
   renderEditor() {
@@ -146,11 +167,6 @@ export class WriterApp {
     contentEl.addEventListener('input', onChange);
     titleEl.addEventListener('blur', () => this.save());
     contentEl.addEventListener('blur', () => this.save());
-
-    this.container.querySelector('[data-action="back"]').addEventListener('click', () => {
-      this.save();
-      this.renderList();
-    });
 
     // Auto-grow textarea
     const adjust = () => {

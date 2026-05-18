@@ -36,6 +36,7 @@ export const ICONS = {
   activity:      svg('<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>'),
   feather:       svg('<path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/>'),
   arrowRight:    svg('<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>'),
+  scales:        svg('<path d="M12 3v18"/><path d="M5 21h14"/><path d="M5 7h14"/><path d="M5 7l-3 6a3 3 0 0 0 6 0z"/><path d="M19 7l-3 6a3 3 0 0 0 6 0z"/>'),
 };
 
 export const weatherCodeIcon = (code, isDay = true) => {

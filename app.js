@@ -200,6 +200,81 @@ function openProject(name) {
     document.body.classList.add('project-open');
     return;
   }
+
+  if (name === 'beiue') {
+    inner.innerHTML = `
+      <div class="project-shell">
+        <div class="project-bar">
+          <button class="project-bar__back" type="button" data-close>← Bob</button>
+          <span class="project-bar__title">BEIUE</span>
+        </div>
+        <div class="beiue-form">
+          <p class="beiue-form__intro">Truth engine. Renseigne la cible, le moteur fait le reste.</p>
+          <label class="beiue-field">
+            <span class="beiue-field__label">Prénom</span>
+            <input type="text" class="beiue-field__input" id="beiueName" placeholder="Marc" autocomplete="off" spellcheck="false">
+          </label>
+          <div class="beiue-field">
+            <span class="beiue-field__label">Genre</span>
+            <div class="beiue-segment" data-segment="gender" role="radiogroup">
+              <button type="button" class="beiue-segment__opt beiue-segment__opt--active" data-value="m" role="radio" aria-checked="true">Masculin</button>
+              <button type="button" class="beiue-segment__opt" data-value="f" role="radio" aria-checked="false">Féminin</button>
+            </div>
+          </div>
+          <div class="beiue-field">
+            <span class="beiue-field__label">Posture</span>
+            <div class="beiue-segment" data-segment="kind" role="radiogroup">
+              <button type="button" class="beiue-segment__opt beiue-segment__opt--active" data-value="0" role="radio" aria-checked="true">Pas gentil</button>
+              <button type="button" class="beiue-segment__opt" data-value="1" role="radio" aria-checked="false">Gentil</button>
+            </div>
+          </div>
+          <button type="button" class="beiue-launch" id="beiueLaunch" disabled>Lancer</button>
+        </div>
+      </div>
+    `;
+    inner.querySelector('[data-close]').addEventListener('click', close);
+
+    const nameInput = inner.querySelector('#beiueName');
+    const launchBtn = inner.querySelector('#beiueLaunch');
+    let gender = 'm';
+    let kind = '0';
+
+    inner.querySelectorAll('[data-segment]').forEach(group => {
+      group.addEventListener('click', (e) => {
+        const opt = e.target.closest('.beiue-segment__opt');
+        if (!opt) return;
+        haptic(4);
+        group.querySelectorAll('.beiue-segment__opt').forEach(b => {
+          const active = b === opt;
+          b.classList.toggle('beiue-segment__opt--active', active);
+          b.setAttribute('aria-checked', active ? 'true' : 'false');
+        });
+        if (group.dataset.segment === 'gender') gender = opt.dataset.value;
+        else kind = opt.dataset.value;
+      });
+    });
+
+    const syncEnabled = () => {
+      launchBtn.disabled = !nameInput.value.trim();
+    };
+    nameInput.addEventListener('input', syncEnabled);
+
+    launchBtn.addEventListener('click', () => {
+      const n = nameInput.value.trim();
+      if (!n) return;
+      const params = new URLSearchParams();
+      params.set('n', n);
+      let qs = params.toString();
+      if (gender === 'f') qs += '&f';
+      if (kind === '1') qs += '&g';
+      window.open(`https://icoari.github.io/BEIUE/?${qs}`, '_blank', 'noopener,noreferrer');
+    });
+
+    overlay.hidden = false;
+    document.body.classList.add('project-open');
+    setTimeout(() => nameInput.focus(), 280);
+    return;
+  }
 }
 
 function initProjects() {

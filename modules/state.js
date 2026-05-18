@@ -71,20 +71,19 @@ const DEFAULT_SETTINGS = {
   },
   youtube: {
     channels: [
-      // English — actu IA / tech
+      // English — main channels (verified May 2026)
       { id: 'tmp',      channelId: 'UCbfYPyITQ-7l4upoX8nvctg', name: 'Two Minute Papers', enabled: true, lang: 'en' },
-      { id: 'aigrid',   channelId: 'UCSPkiRjFYpz-8DY-aF_1wRg', name: 'The AI Grid',       enabled: true, lang: 'en' },
-      { id: 'yk',       channelId: 'UCHmD-oSpV0sNfAUnpYpj8KA', name: 'Yannic Kilcher',    enabled: true, lang: 'en' },
-      { id: 'lex',      channelId: 'UCJIfeSCssxSC_Dhc5s7woww', name: 'Lex Fridman',       enabled: true, lang: 'en' },
-      { id: 'fireship', channelId: 'UC2Xd-TjJByJyK2w1zNwY0zQ', name: 'Fireship',          enabled: true, lang: 'en' },
-      // French — actu IA / tech
+      { id: 'lex',      channelId: 'UCSHZKyawb77ixDdsGog4iWA', name: 'Lex Fridman',       enabled: true, lang: 'en' },
+      { id: 'yk',       channelId: 'UCZHmQk67mSJgfCCTn7xBfew', name: 'Yannic Kilcher',    enabled: true, lang: 'en' },
+      { id: 'mattwolfe', channelId: 'UChpleBmo18P08aKCIgti38g', name: 'Matt Wolfe',       enabled: true, lang: 'en' },
+      { id: 'aiexpl',   channelId: 'UCNJ1Ymd5yFuUPtn21xtRbbw', name: 'AI Explained',      enabled: true, lang: 'en' },
+      { id: 'fireship', channelId: 'UCsBjURrPoezykLs9EqgamOA', name: 'Fireship',          enabled: true, lang: 'en' },
+      // French
       { id: 'underscore', channelId: 'UCWedHS9qKebauVIK2J7383g', name: 'Underscore_',         enabled: true, lang: 'fr' },
       { id: 'defendia',   channelId: 'UCnEHCrot2HkySxMTmDPhZyg', name: 'Defend Intelligence', enabled: true, lang: 'fr' },
       { id: 'cocadmin',   channelId: 'UCVRJ6D343dX-x730MRP8tNw', name: 'cocadmin',            enabled: true, lang: 'fr' },
       { id: 'actutech',   channelId: 'UCTag-fSBSpjH0g3fTUatAfg', name: 'Actu Tech',           enabled: true, lang: 'fr' },
-      { id: 'codevega',   channelId: 'UCglJU3xeXOcq7d3kQP_4BOg', name: 'Code:Vega',           enabled: true, lang: 'fr' },
       // Optional — disabled by default
-      { id: 'matt-vidpro', channelId: 'UC06GdmaEdCdCFwR3NvszloQ', name: 'Matt VidPro AI', enabled: false, lang: 'en' },
       { id: '3b1b',        channelId: 'UC1_uAIS3r8Vu6JjXWvastJg', name: '3Blue1Brown',    enabled: false, lang: 'en' },
       { id: 'sentdex',     channelId: 'UCQALLeQPoZdZC4JNUboVEUg', name: 'Sentdex',        enabled: false, lang: 'en' },
       { id: 'micode',      channelId: 'UCYnvxJ-PKiGXo_tYXpWAC-w', name: 'Micode (perso)', enabled: false, lang: 'fr' },
@@ -120,11 +119,30 @@ function load() {
 
 // Targeted migrations between schema versions
 function migrate(merged) {
-  // Old YouTube channels (scienceclic/réveilleur/hygiène) → replace with the
-  // new actu tech/IA curated list. Detection by presence of one of the old ids.
-  const oldChannelIds = ['scienceclic', 'reveilleur', 'hygiene'];
   const channels = merged.settings?.youtube?.channels;
-  if (channels && channels.some(c => oldChannelIds.includes(c.id))) {
+  if (!channels) return merged;
+
+  // Old YouTube channels (early curation list) — replace entirely with new defaults
+  const oldChannelIds = ['scienceclic', 'reveilleur', 'hygiene'];
+  if (channels.some(c => oldChannelIds.includes(c.id))) {
+    merged.settings.youtube.channels = structuredClone(DEFAULT_STATE).settings.youtube.channels;
+    return merged;
+  }
+
+  // Bad channel IDs that pointed to defunct or secondary channels:
+  //   UCSPkiRjFYpz-8DY-aF_1wRg → TheLifeGrid (defunct since 2022)
+  //   UC2Xd-TjJByJyK2w1zNwY0zQ → Beyond Fireship (secondary)
+  //   UCHmD-oSpV0sNfAUnpYpj8KA → Yannic OOD (secondary, inactive)
+  //   UCJIfeSCssxSC_Dhc5s7woww → Lex Clips (secondary, not the main podcast)
+  //   UCglJU3xeXOcq7d3kQP_4BOg → Code:Vega (low activity, replaced)
+  const badChannelIds = [
+    'UCSPkiRjFYpz-8DY-aF_1wRg',
+    'UC2Xd-TjJByJyK2w1zNwY0zQ',
+    'UCHmD-oSpV0sNfAUnpYpj8KA',
+    'UCJIfeSCssxSC_Dhc5s7woww',
+    'UCglJU3xeXOcq7d3kQP_4BOg',
+  ];
+  if (channels.some(c => badChannelIds.includes(c.channelId))) {
     merged.settings.youtube.channels = structuredClone(DEFAULT_STATE).settings.youtube.channels;
   }
   return merged;

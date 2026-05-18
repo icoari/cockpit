@@ -42,7 +42,7 @@ function clearToken() {
   save();
 }
 
-async function requestToken() {
+async function requestToken({ silent = false } = {}) {
   await loadGIS();
   const clientId = getSettings().calendar?.clientId;
   if (!clientId) throw new Error('CLIENT_ID_MISSING');
@@ -58,16 +58,35 @@ async function requestToken() {
           resolve(resp.access_token);
         }
       },
-      error_callback: (err) => reject(new Error(err.message || 'Échec de connexion Google')),
+      error_callback: (err) => reject(new Error(err.type || err.message || 'oauth_error')),
     });
-    client.requestAccessToken();
+    // prompt: '' attempts a silent re-issue using the existing Google session.
+    // If the user has previously consented and is still signed in to Google,
+    // the token is returned without any UI. Falls back to error_callback if
+    // consent is needed (e.g., first sign-in, revoked access, etc.).
+    if (silent) {
+      client.requestAccessToken({ prompt: '' });
+    } else {
+      client.requestAccessToken();
+    }
   });
 }
 
-async function fetchEvents() {
+async function ensureToken() {
   let token = getStoredToken();
-  if (!token) token = await requestToken();
+  if (token) return token;
+  // Try silent refresh first (no UI). If user has previously consented and the
+  // Google session is still valid, returns a fresh token transparently.
+  try {
+    return await requestToken({ silent: true });
+  } catch (e) {
+    // Silent failed — caller will need to trigger interactive sign-in
+    throw Object.assign(new Error('SIGN_IN_NEEDED'), { silent: true });
+  }
+}
 
+async function fetchEvents() {
+  let token = await ensureToken();
   const calendarId = encodeURIComponent(getSettings().calendar?.calendarId || 'primary');
   const timeMin = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
   const timeMax = new Date(Date.now() + 48 * 3600 * 1000).toISOString();
@@ -75,7 +94,12 @@ async function fetchEvents() {
   const resp = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${token}` } }, 9000);
   if (resp.status === 401) {
     clearToken();
-    token = await requestToken();
+    // Token got invalidated server-side — try silent once
+    try {
+      token = await requestToken({ silent: true });
+    } catch {
+      throw Object.assign(new Error('SIGN_IN_NEEDED'), { silent: true });
+    }
     return fetchEvents();
   }
   if (!resp.ok) throw new Error(`Agenda : HTTP ${resp.status}`);
@@ -184,7 +208,7 @@ export class CalendarWidget {
 
   async signIn() {
     try {
-      await requestToken();
+      await requestToken({ silent: false });
       this.refresh();
     } catch (e) {
       this.setBody(`<div class="card__error">${escapeHTML(e.message || 'Échec de connexion')}</div>`);
@@ -204,19 +228,11 @@ export class CalendarWidget {
       return;
     }
 
-    if (!getStoredToken()) {
-      this.setBody(`
-        <div class="signin-block">
-          <p class="signin-block__text">Connecte-toi à Google pour afficher ton agenda.</p>
-          <button class="btn" type="button" data-action="signin">Se connecter à Google</button>
-        </div>
-      `);
-      this.setSubtitle('non connecté');
-      return;
-    }
-
     this.setBody('<div class="card__loading">Chargement…</div>');
     try {
+      // fetchEvents() handles its own token: stored → silent refresh → throw
+      // SIGN_IN_NEEDED. We catch SIGN_IN_NEEDED below and show the button only
+      // when silent refresh actually failed (first sign-in or revoked access).
       const data = await fetchEvents();
       const events = data.items || [];
       if (events.length === 0) {
@@ -261,6 +277,17 @@ export class CalendarWidget {
     } catch (e) {
       if (e.message === 'CLIENT_ID_MISSING') {
         return this.refresh();
+      }
+      if (e.message === 'SIGN_IN_NEEDED') {
+        // Silent refresh failed — show the sign-in button
+        this.setBody(`
+          <div class="signin-block">
+            <p class="signin-block__text">Connecte-toi à Google pour afficher ton agenda.</p>
+            <button class="btn" type="button" data-action="signin">Se connecter à Google</button>
+          </div>
+        `);
+        this.setSubtitle('non connecté');
+        return;
       }
       this.setBody(`<div class="card__error">${escapeHTML(e.message)}</div>`);
       this.setSubtitle('erreur');

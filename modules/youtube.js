@@ -2,7 +2,7 @@ import { getSettings, cacheGet, cacheSet, cacheBust, markAiRead, isAiRead, setFe
 import { ICONS } from './icons.js';
 import { escapeHTML, fetchWithTimeout, timeAgo, haptic, debounce } from './util.js';
 
-const CACHE_TTL = 30 * 60 * 1000;
+const CACHE_TTL = 10 * 60 * 1000;
 const CORS_PROXY = 'https://corsproxy.io/?';
 const YT_RSS = (channelId) => `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
 const MAX_DAYS = 10;

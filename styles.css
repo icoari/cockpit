@@ -98,6 +98,45 @@ body {
 
 a { color: inherit; text-decoration: none; }
 
+/* ============================================================
+   Landscape orientation overlay (iOS PWA can't truly lock)
+   ============================================================ */
+.landscape-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  background-image:
+    radial-gradient(circle at 50% 30%, rgba(99, 81, 196, 0.22), transparent 60%);
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .landscape-overlay { display: flex; }
+  body > main,
+  body > nav { display: none; }
+}
+
+.landscape-overlay__inner {
+  text-align: center;
+}
+
+.landscape-overlay__title {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.landscape-overlay__text {
+  font-size: 14px;
+  color: var(--text-dim);
+  letter-spacing: -0.01em;
+}
+
 button {
   font-family: inherit;
   -webkit-tap-highlight-color: transparent;

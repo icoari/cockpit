@@ -2049,16 +2049,17 @@ body.theme-light .theme-row { background: rgba(0, 0, 0, 0.04); }
 }
 
 .event__del {
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   background: none;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 7px;
   color: var(--text-faint);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
+  margin: -2px 0;
   flex-shrink: 0;
   cursor: pointer;
   transition: color 160ms var(--ease), border-color 160ms var(--ease), background 160ms var(--ease);
@@ -2072,7 +2073,7 @@ body.theme-light .theme-row { background: rgba(0, 0, 0, 0.04); }
   background: rgba(226, 109, 92, 0.08);
 }
 
-.event__del svg { width: 13px; height: 13px; }
+.event__del svg { width: 12px; height: 12px; }
 
 .event__dot {
   display: inline-block;

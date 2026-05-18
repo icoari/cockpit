@@ -1,4 +1,4 @@
-const CACHE = 'bob-v14';
+const CACHE = 'bob-v15';
 const ASSETS = [
   './',
   './index.html',
@@ -21,6 +21,7 @@ const ASSETS = [
   './modules/pharmacies.js',
   './modules/youtube.js',
   './modules/hackernews.js',
+  './modules/writer.js',
   './modules/settings.js',
   './icons/icon.svg',
 ];

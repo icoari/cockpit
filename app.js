@@ -14,6 +14,7 @@ import { CalendarWidget } from './modules/calendar.js';
 import { BinsWidget } from './modules/bins.js';
 import { PharmaciesWidget } from './modules/pharmacies.js';
 import { SettingsPanel } from './modules/settings.js';
+import { WriterApp } from './modules/writer.js';
 
 // ---------- Theme ----------
 function applyTheme() {
@@ -159,12 +160,60 @@ window.matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', 
   if ((getSettings().theme || 'auto') === 'auto') applyTheme();
 });
 
+// ---------- Projets overlay ----------
+function openProject(name) {
+  const overlay = document.getElementById('projectOverlay');
+  const inner = document.getElementById('projectOverlayInner');
+  if (!overlay || !inner) return;
+
+  const close = () => {
+    overlay.hidden = true;
+    inner.innerHTML = '';
+    document.body.classList.remove('project-open');
+  };
+
+  if (name === 'health') {
+    inner.innerHTML = `
+      <div class="project-shell">
+        <div class="project-bar">
+          <button class="project-bar__back" type="button" data-close>← Bob</button>
+          <span class="project-bar__title">Suivi santé</span>
+        </div>
+        <iframe class="project-frame" src="../health-tracker/" allow="vibrate"></iframe>
+      </div>
+    `;
+    inner.querySelector('[data-close]').addEventListener('click', close);
+    overlay.hidden = false;
+    document.body.classList.add('project-open');
+    return;
+  }
+
+  if (name === 'writer') {
+    inner.innerHTML = `<div class="project-shell project-shell--writer" id="writerHost"></div>`;
+    new WriterApp(document.getElementById('writerHost'), { onExit: close });
+    overlay.hidden = false;
+    document.body.classList.add('project-open');
+    return;
+  }
+}
+
+function initProjects() {
+  document.body.addEventListener('click', (e) => {
+    const card = e.target.closest('[data-project]');
+    if (card) {
+      haptic(6);
+      openProject(card.dataset.project);
+    }
+  });
+}
+
 // ---------- Init ----------
 applyTheme();
 renderHeader();
 mountWidgets();
 initTabs();
 initSettings();
+initProjects();
 
 // ---------- Service worker registration (moved from inline script for CSP) ----------
 if ('serviceWorker' in navigator) {

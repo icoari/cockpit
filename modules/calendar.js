@@ -90,17 +90,22 @@ async function fetchEventsRange(timeMinIso, timeMaxIso) {
   return resp.json();
 }
 
-async function createEvent(title, dateIso) {
+async function createEvent(title, startIso, endIso, colorId) {
   const token = await ensureToken();
-  const endDate = new Date(dateIso + 'T00:00:00');
-  endDate.setDate(endDate.getDate() + 1);
   const pad = (n) => String(n).padStart(2, '0');
-  const endIso = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(endDate.getDate())}`;
+  // Last covered day (inclusive). Google end.date is exclusive, so add 1.
+  const lastDay = endIso && endIso >= startIso ? endIso : startIso;
+  const last = new Date(lastDay + 'T00:00:00');
+  last.setDate(last.getDate() + 1);
+  const exclusiveEnd = `${last.getFullYear()}-${pad(last.getMonth() + 1)}-${pad(last.getDate())}`;
+
   const body = {
     summary: title,
-    start: { date: dateIso },
-    end:   { date: endIso },
+    start: { date: startIso },
+    end:   { date: exclusiveEnd },
   };
+  if (colorId) body.colorId = String(colorId);
+
   const resp = await fetchWithTimeout(calendarUrl(), {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -148,7 +153,47 @@ function getEventDate(ev) {
   return new Date(ev.start.dateTime);
 }
 
+function getEventEnd(ev) {
+  if (ev.end?.date) return new Date(ev.end.date + 'T00:00:00');
+  if (ev.end?.dateTime) return new Date(ev.end.dateTime);
+  return null;
+}
+
 function isAllDay(ev) { return !!ev.start.date; }
+
+// Returns the list of Date objects (00:00) the event covers.
+// All-day events: end.date is exclusive (Google convention) — covers
+// [start.date, end.date). Timed events: covers [start day, end day]
+// (inclusive on both sides, except if end is exactly midnight).
+function eventDays(ev) {
+  const start = getEventDate(ev);
+  const end = getEventEnd(ev);
+  if (!end) {
+    const d = new Date(start); d.setHours(0, 0, 0, 0);
+    return [d];
+  }
+  const startDay = new Date(start); startDay.setHours(0, 0, 0, 0);
+  let endDay;
+  if (isAllDay(ev)) {
+    // end.date is exclusive — last covered day is end - 1
+    endDay = new Date(end); endDay.setHours(0, 0, 0, 0);
+    endDay.setDate(endDay.getDate() - 1);
+  } else {
+    endDay = new Date(end); endDay.setHours(0, 0, 0, 0);
+    // If event ends at exactly midnight, don't count the end day
+    if (end.getHours() === 0 && end.getMinutes() === 0 && end.getSeconds() === 0) {
+      endDay.setDate(endDay.getDate() - 1);
+    }
+  }
+  if (endDay < startDay) endDay = new Date(startDay);
+  const days = [];
+  const cur = new Date(startDay);
+  while (cur <= endDay) {
+    days.push(new Date(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return days;
+}
 
 function fmtEventTime(ev) {
   if (isAllDay(ev)) return 'Journée';
@@ -174,6 +219,7 @@ export class CalendarWidget {
     this.selectedDay = toIso(now);
     this.events = [];
     this.createOpen = false;
+    this.createColorId = '';
     this.render();
     this.attach();
     this.refresh();
@@ -235,6 +281,16 @@ export class CalendarWidget {
         this.renderBody();
         return;
       }
+      const colorBtn = e.target.closest('[data-cal-color]');
+      if (colorBtn) {
+        e.stopPropagation();
+        haptic(2);
+        this.createColorId = colorBtn.dataset.calColor;
+        this.container.querySelectorAll('[data-cal-color]').forEach(b => {
+          b.classList.toggle('cal-color--selected', b.dataset.calColor === this.createColorId);
+        });
+        return;
+      }
       if (e.target.closest('[data-action="today"]')) {
         e.stopPropagation();
         haptic(4);
@@ -271,15 +327,18 @@ export class CalendarWidget {
 
   async submitCreate() {
     const titleEl = this.container.querySelector('[data-create-title]');
-    const dateEl  = this.container.querySelector('[data-create-date]');
+    const startEl = this.container.querySelector('[data-create-start]');
+    const endEl   = this.container.querySelector('[data-create-end]');
     const title = titleEl?.value.trim();
-    const date  = dateEl?.value;
-    if (!title || !date) return;
+    const startDate  = startEl?.value;
+    const endDate    = endEl?.value || startDate;
+    if (!title || !startDate) return;
     const submitBtn = this.container.querySelector('[data-action="create-submit"]');
     if (submitBtn) submitBtn.disabled = true;
     try {
-      await createEvent(title, date);
+      await createEvent(title, startDate, endDate, this.createColorId);
       this.createOpen = false;
+      this.createColorId = '';
       haptic(12);
       await this.refresh();
     } catch (e) {
@@ -373,10 +432,11 @@ export class CalendarWidget {
     const todayIso = toIso(today);
     const eventsByDay = new Map();
     for (const ev of this.events) {
-      const d = getEventDate(ev);
-      const key = toIso(d);
-      if (!eventsByDay.has(key)) eventsByDay.set(key, []);
-      eventsByDay.get(key).push(ev);
+      for (const d of eventDays(ev)) {
+        const key = toIso(d);
+        if (!eventsByDay.has(key)) eventsByDay.set(key, []);
+        eventsByDay.get(key).push(ev);
+      }
     }
     const monthLabel = fmtMonth(this.viewYear, this.viewMonth);
     const cellsHtml = cells.map(d => {
@@ -420,13 +480,11 @@ export class CalendarWidget {
   renderSelectedDayList() {
     const selectedDate = new Date(this.selectedDay + 'T00:00:00');
     const dayEvents = this.events
-      .map(ev => ({ ev, d: getEventDate(ev) }))
-      .filter(x => isSameDay(x.d, selectedDate))
+      .filter(ev => eventDays(ev).some(d => isSameDay(d, selectedDate)))
       .sort((a, b) => {
-        // All-day events first, then by time
-        if (isAllDay(a.ev) && !isAllDay(b.ev)) return -1;
-        if (!isAllDay(a.ev) && isAllDay(b.ev)) return 1;
-        return a.d - b.d;
+        if (isAllDay(a) && !isAllDay(b)) return -1;
+        if (!isAllDay(a) && isAllDay(b)) return 1;
+        return getEventDate(a) - getEventDate(b);
       });
     const label = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
       .format(selectedDate);
@@ -440,20 +498,41 @@ export class CalendarWidget {
       `;
     }
 
+    const dayLabelShort = (d) => new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(d);
+
     return `
       <div class="cal-day-list">
         <div class="cal-day-list__label">${escapeHTML(label)}</div>
         <div class="event-list">
-          ${dayEvents.map(({ ev }) => `
-            <div class="event">
-              <span class="event__dot" style="background:${eventColor(ev)}"></span>
-              <div class="event__time">${escapeHTML(fmtEventTime(ev))}</div>
-              <div class="event__main">
-                <div class="event__title">${escapeHTML(ev.summary || '(sans titre)')}</div>
-                ${ev.location ? `<div class="event__location">${escapeHTML(ev.location)}</div>` : ''}
+          ${dayEvents.map(ev => {
+            const days = eventDays(ev);
+            const multi = days.length > 1;
+            let spanInfo = '';
+            if (multi) {
+              const first = days[0];
+              const last = days[days.length - 1];
+              const isFirst = isSameDay(first, selectedDate);
+              const isLast  = isSameDay(last,  selectedDate);
+              if (isFirst) spanInfo = `→ jusqu'au ${dayLabelShort(last)}`;
+              else if (isLast) spanInfo = `depuis le ${dayLabelShort(first)} →`;
+              else {
+                const dayIdx = days.findIndex(d => isSameDay(d, selectedDate)) + 1;
+                spanInfo = `jour ${dayIdx} / ${days.length} · jusqu'au ${dayLabelShort(last)}`;
+              }
+            }
+            const timeLabel = multi ? '' : fmtEventTime(ev);
+            return `
+              <div class="event ${multi ? 'event--multi' : ''}">
+                <span class="event__dot" style="background:${eventColor(ev)}"></span>
+                <div class="event__time">${escapeHTML(timeLabel || (isAllDay(ev) ? 'Journée' : ''))}</div>
+                <div class="event__main">
+                  <div class="event__title">${escapeHTML(ev.summary || '(sans titre)')}</div>
+                  ${spanInfo ? `<div class="event__span">${escapeHTML(spanInfo)}</div>` : ''}
+                  ${ev.location ? `<div class="event__location">${escapeHTML(ev.location)}</div>` : ''}
+                </div>
               </div>
-            </div>
-          `).join('')}
+            `;
+          }).join('')}
         </div>
       </div>
     `;
@@ -461,10 +540,37 @@ export class CalendarWidget {
 
   renderCreateForm() {
     const defaultDate = this.selectedDay;
+    const colorChoices = [
+      { id: '', color: '#7FD1B9', label: 'Par défaut' },
+      { id: '1',  color: GOOGLE_COLORS['1'],  label: 'Lavande' },
+      { id: '2',  color: GOOGLE_COLORS['2'],  label: 'Sauge' },
+      { id: '10', color: GOOGLE_COLORS['10'], label: 'Basilic' },
+      { id: '7',  color: GOOGLE_COLORS['7'],  label: 'Paon' },
+      { id: '9',  color: GOOGLE_COLORS['9'],  label: 'Myrtille' },
+      { id: '3',  color: GOOGLE_COLORS['3'],  label: 'Raisin' },
+      { id: '4',  color: GOOGLE_COLORS['4'],  label: 'Flamant' },
+      { id: '5',  color: GOOGLE_COLORS['5'],  label: 'Banane' },
+      { id: '6',  color: GOOGLE_COLORS['6'],  label: 'Mandarine' },
+      { id: '11', color: GOOGLE_COLORS['11'], label: 'Tomate' },
+      { id: '8',  color: GOOGLE_COLORS['8'],  label: 'Graphite' },
+    ];
+    const colorsHtml = colorChoices.map(c => `
+      <button class="cal-color ${c.id === this.createColorId ? 'cal-color--selected' : ''}"
+              data-cal-color="${c.id}"
+              style="background:${c.color}"
+              type="button"
+              title="${escapeHTML(c.label)}"
+              aria-label="${escapeHTML(c.label)}"></button>
+    `).join('');
     return `
       <div class="cal-create">
         <input class="input cal-create__title" type="text" placeholder="Titre de l'événement" data-create-title>
-        <input class="input cal-create__date" type="date" value="${defaultDate}" data-create-date>
+        <div class="cal-create__dates">
+          <input class="input" type="date" value="${defaultDate}" data-create-start>
+          <span class="cal-create__sep">→</span>
+          <input class="input" type="date" value="${defaultDate}" data-create-end>
+        </div>
+        <div class="cal-create__colors">${colorsHtml}</div>
         <div class="btn-row">
           <button class="btn btn--ghost" type="button" data-action="create-cancel">Annuler</button>
           <button class="btn" type="button" data-action="create-submit">Créer</button>

@@ -45,7 +45,7 @@ function renderHeader() {
 }
 
 // ---------- Tabs ----------
-const TAB_LABELS = { perso: 'Perso', trains: 'Trains', pro: 'Pro', settings: 'Réglages' };
+const TAB_LABELS = { perso: 'Perso', trains: 'Trains', pro: 'Pro', projets: 'Projets', settings: 'Réglages' };
 
 function setActiveTab(name) {
   document.querySelectorAll('.tabbar-btn').forEach(b => {

@@ -32,6 +32,7 @@ export const ICONS = {
   mapPin:        svg('<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>'),
   home:          svg('<path d="M12 21s-7-4.5-7-11a4.5 4.5 0 0 1 7-3 4.5 4.5 0 0 1 7 3c0 6.5-7 11-7 11z"/>'),
   briefcase:     svg('<path d="M12 3l2 5.5 5.5 1L15 13l1.5 6L12 16l-4.5 3L9 13 4.5 9.5 10 8.5z"/>'),
+  layers:        svg('<polygon points="12 2 3 7 12 12 21 7 12 2"/><polyline points="3 17 12 22 21 17"/><polyline points="3 12 12 17 21 12"/>'),
 };
 
 export const weatherCodeIcon = (code, isDay = true) => {

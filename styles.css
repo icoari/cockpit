@@ -1807,6 +1807,14 @@ body.theme-light .writer-bar { background: rgba(255, 255, 255, 0.92); }
   transition: border-color 160ms var(--ease);
 }
 
+/* Force system font on password inputs — Inter as loaded over Google Fonts
+   on iOS sometimes lacks the password mask glyph (U+2022) and renders .notdef
+   rectangles ("No Glyph") instead. System fonts always have it. */
+.input[type="password"] {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  letter-spacing: 0.04em;
+}
+
 .input:focus { outline: none; border-color: var(--accent-glow); }
 
 .label-row {

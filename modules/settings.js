@@ -268,13 +268,18 @@ export class SettingsPanel {
         reader.onload = () => {
           try {
             importData(reader.result);
-            this.render();
-            this.onChange();
+            // Reload to guarantee every widget (and the health-tracker iframe
+            // on next open) reads the freshly imported state cleanly.
+            alert('Import réussi. La page va se recharger.');
+            location.reload();
           } catch (err) {
-            alert('Échec de l\'import : ' + err.message);
+            alert('Échec de l\'import : ' + (err.message || err));
           }
         };
+        reader.onerror = () => alert('Lecture du fichier échouée');
         reader.readAsText(file.files[0]);
+        // Reset value so re-selecting the same file still fires `change`
+        file.value = '';
       }
     });
   }

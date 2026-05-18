@@ -117,6 +117,10 @@ async function loadAll(apiKey) {
   // from the current time, then take the *last* one in the response. That's
   // the actual last departure of the night. For N152 (night service), query
   // from 22:30 so we always hit tonight's schedule even during the day.
+  const fetchRer = () => fetchJourney(apiKey, rerStation.lat, rerStation.lon,
+                 COORDS.conflansFinDOise.lat, COORDS.conflansFinDOise.lon,
+                 LINES.RER_A, { count: 50, datetime: nowDt });
+
   const [jFdoList, jShList, rerList, n152List] = await Promise.all([
     fetchJourney(apiKey, COORDS.saintLazare.lat, COORDS.saintLazare.lon,
                  COORDS.conflansFinDOise.lat, COORDS.conflansFinDOise.lon,
@@ -124,22 +128,31 @@ async function loadAll(apiKey) {
     fetchJourney(apiKey, COORDS.saintLazare.lat, COORDS.saintLazare.lon,
                  COORDS.conflansSainteHonorine.lat, COORDS.conflansSainteHonorine.lon,
                  LINES.J, { count: 50, datetime: nowDt }),
-    fetchJourney(apiKey, rerStation.lat, rerStation.lon,
-                 COORDS.conflansFinDOise.lat, COORDS.conflansFinDOise.lon,
-                 LINES.RER_A, { count: 50, datetime: nowDt }),
+    fetchRer(),
     fetchJourney(apiKey, COORDS.saintLazare.lat, COORDS.saintLazare.lon,
                  COORDS.conflansFinDOise.lat, COORDS.conflansFinDOise.lon,
                  LINES.N152, { count: 6, datetime: n152Dt }),
   ]);
 
+  // Navitia returns empty intermittently for the long RER A route — retry once.
+  let rerListFinal = rerList;
+  if (!rerListFinal || rerListFinal.length === 0) {
+    await new Promise(r => setTimeout(r, 400));
+    rerListFinal = await fetchRer();
+  }
+
   const summary = {
     lastJFdo: summariseJourney((jFdoList || []).slice(-1)[0]),
     lastJSh:  summariseJourney((jShList  || []).slice(-1)[0]),
-    lastRer:  { summary: summariseJourney((rerList || []).slice(-1)[0]), fromStation: rerStation.name },
+    lastRer:  { summary: summariseJourney((rerListFinal || []).slice(-1)[0]), fromStation: rerStation.name },
     nextN152: (n152List || []).slice(0, 3).map(summariseJourney).filter(Boolean),
   };
 
-  cacheSet('lastTrainData', dehydrate(summary));
+  // Don't cache a partial failure — better to retry on next visit than show
+  // "Service indisponible" for 6 h until the user manually refreshes.
+  if (summary.lastRer.summary) {
+    cacheSet('lastTrainData', dehydrate(summary));
+  }
   return summary;
 }
 

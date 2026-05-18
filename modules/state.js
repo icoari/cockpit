@@ -119,22 +119,28 @@ function load() {
 
 // Targeted migrations between schema versions
 function migrate(merged) {
-  const channels = merged.settings?.youtube?.channels;
-  if (!channels) return merged;
+  if (!merged.settings) merged.settings = structuredClone(DEFAULT_SETTINGS);
+
+  // Auto-heal: a faulty import or buggy CRUD can leave critical arrays empty.
+  // Restore defaults so the user isn't stuck with no videos / no articles.
+  if (!Array.isArray(merged.settings.aiSources) || merged.settings.aiSources.length === 0) {
+    merged.settings.aiSources = structuredClone(DEFAULT_SETTINGS.aiSources);
+  }
+  if (!merged.settings.youtube) merged.settings.youtube = { channels: [] };
+  if (!Array.isArray(merged.settings.youtube.channels) || merged.settings.youtube.channels.length === 0) {
+    merged.settings.youtube.channels = structuredClone(DEFAULT_SETTINGS.youtube.channels);
+  }
+
+  const channels = merged.settings.youtube.channels;
 
   // Old YouTube channels (early curation list) — replace entirely with new defaults
   const oldChannelIds = ['scienceclic', 'reveilleur', 'hygiene'];
   if (channels.some(c => oldChannelIds.includes(c.id))) {
-    merged.settings.youtube.channels = structuredClone(DEFAULT_STATE).settings.youtube.channels;
+    merged.settings.youtube.channels = structuredClone(DEFAULT_SETTINGS.youtube.channels);
     return merged;
   }
 
-  // Bad channel IDs that pointed to defunct or secondary channels:
-  //   UCSPkiRjFYpz-8DY-aF_1wRg → TheLifeGrid (defunct since 2022)
-  //   UC2Xd-TjJByJyK2w1zNwY0zQ → Beyond Fireship (secondary)
-  //   UCHmD-oSpV0sNfAUnpYpj8KA → Yannic OOD (secondary, inactive)
-  //   UCJIfeSCssxSC_Dhc5s7woww → Lex Clips (secondary, not the main podcast)
-  //   UCglJU3xeXOcq7d3kQP_4BOg → Code:Vega (low activity, replaced)
+  // Bad channel IDs that pointed to defunct or secondary channels.
   const badChannelIds = [
     'UCSPkiRjFYpz-8DY-aF_1wRg',
     'UC2Xd-TjJByJyK2w1zNwY0zQ',
@@ -143,7 +149,7 @@ function migrate(merged) {
     'UCglJU3xeXOcq7d3kQP_4BOg',
   ];
   if (channels.some(c => badChannelIds.includes(c.channelId))) {
-    merged.settings.youtube.channels = structuredClone(DEFAULT_STATE).settings.youtube.channels;
+    merged.settings.youtube.channels = structuredClone(DEFAULT_SETTINGS.youtube.channels);
   }
   return merged;
 }
@@ -282,7 +288,22 @@ export function importData(json) {
   const rest = { ...parsed };
   delete rest._writer;
   delete rest._healthTracker;
+
+  // Defensive: an empty critical array in the backup must NOT wipe the
+  // populated defaults (mergeDeep replaces arrays wholesale).
+  if (rest.settings) {
+    if (Array.isArray(rest.settings.aiSources) && rest.settings.aiSources.length === 0) {
+      delete rest.settings.aiSources;
+    }
+    if (rest.settings.youtube && Array.isArray(rest.settings.youtube.channels)
+        && rest.settings.youtube.channels.length === 0) {
+      delete rest.settings.youtube.channels;
+    }
+  }
+
   state = mergeDeep(structuredClone(DEFAULT_STATE), rest);
+  state = migrate(state);     // auto-heal anything still missing
+  state.cache = {};            // force every widget to refetch fresh data
   save();
   if (writer && typeof writer === 'object') {
     try { localStorage.setItem(WRITER_KEY, JSON.stringify(writer)); } catch {}

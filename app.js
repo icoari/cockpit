@@ -71,9 +71,19 @@ function initTabs() {
   });
 
   document.querySelectorAll('.tabbar-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       haptic(4);
       setActiveTab(btn.dataset.tab);
+      // iOS ghost-click guard: after a fast tab switch, the synthesized click
+      // from the same tap can land on a link in the freshly rendered pane.
+      // Block pointer events on the content briefly to absorb it.
+      const main = document.querySelector('.app');
+      if (main) {
+        main.style.pointerEvents = 'none';
+        setTimeout(() => { main.style.pointerEvents = ''; }, 350);
+      }
     });
   });
 

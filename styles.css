@@ -1135,6 +1135,9 @@ body.theme-light .projet-card--empty { background: rgba(20, 20, 30, 0.02); }
   animation: projOverlayIn 280ms var(--ease-out);
 }
 
+/* The `hidden` HTML attribute must beat our display:flex */
+.project-overlay[hidden] { display: none; }
+
 @keyframes projOverlayIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }

@@ -1,4 +1,4 @@
-const CACHE = 'bob-v15';
+const CACHE = 'bob-v16';
 const ASSETS = [
   './',
   './index.html',

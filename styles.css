@@ -163,6 +163,55 @@ button {
 
 .pane[hidden] { display: none; }
 
+/* ============================================================
+   Sub-tabs (used inside the Pro pane)
+   ============================================================ */
+.subtabs {
+  display: flex;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 4px;
+  margin-bottom: 4px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.subtab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 160ms var(--ease), color 160ms var(--ease);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  letter-spacing: -0.005em;
+}
+
+.subtab:hover { color: var(--text); }
+
+.subtab--active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.subtab-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: paneIn 240ms var(--ease-out);
+}
+
+.subtab-pane[hidden] { display: none; }
+
 @keyframes paneIn {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }

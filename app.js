@@ -107,7 +107,33 @@ function mountWidgets() {
   widgets.lastTrain    = new LastTrainWidget(document.querySelector('[data-widget="last-train"]'));
   widgets.youtube      = new YoutubeWidget(document.querySelector('[data-widget="youtube"]'));
   widgets.hackernews   = new HackerNewsWidget(document.querySelector('[data-widget="hackernews"]'));
-  widgets.techwatch    = new FeedWidget(document.querySelector('[data-widget="techwatch"]'), { category: 'tech', title: 'Veille tech' });
+  widgets.articles     = new FeedWidget(document.querySelector('[data-widget="articles"]'), { category: 'articles', title: 'Articles tech & IA', placeholder: 'Rechercher dans les articles…' });
+}
+
+// ---------- Sub-tabs (Pro pane) ----------
+function initSubtabs() {
+  const buttons = document.querySelectorAll('[data-subtabs] .subtab');
+  if (!buttons.length) return;
+
+  function setActive(name) {
+    buttons.forEach(b => b.classList.toggle('subtab--active', b.dataset.subtab === name));
+    document.querySelectorAll('[data-subtab-pane]').forEach(p => {
+      p.hidden = p.dataset.subtabPane !== name;
+    });
+    updateSettings({ proSubtab: name });
+  }
+
+  buttons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      haptic(4);
+      setActive(btn.dataset.subtab);
+    });
+  });
+
+  const saved = getSettings().proSubtab || 'videos';
+  setActive(saved);
 }
 
 // ---------- Settings ----------
@@ -302,6 +328,7 @@ applyTheme();
 renderHeader();
 mountWidgets();
 initTabs();
+initSubtabs();
 initSettings();
 initProjects();
 

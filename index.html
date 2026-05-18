@@ -64,9 +64,20 @@
     </section>
 
     <section class="pane" data-pane="pro" hidden>
-      <div class="widget" data-widget="youtube"></div>
-      <div class="widget" data-widget="hackernews"></div>
-      <div class="widget" data-widget="techwatch"></div>
+      <nav class="subtabs" data-subtabs role="tablist">
+        <button class="subtab" data-subtab="videos" type="button" role="tab">Vidéos</button>
+        <button class="subtab" data-subtab="articles" type="button" role="tab">Articles</button>
+        <button class="subtab" data-subtab="hn" type="button" role="tab">HN</button>
+      </nav>
+      <div class="subtab-pane" data-subtab-pane="videos">
+        <div class="widget" data-widget="youtube"></div>
+      </div>
+      <div class="subtab-pane" data-subtab-pane="articles" hidden>
+        <div class="widget" data-widget="articles"></div>
+      </div>
+      <div class="subtab-pane" data-subtab-pane="hn" hidden>
+        <div class="widget" data-widget="hackernews"></div>
+      </div>
     </section>
 
     <section class="pane" data-pane="projets" hidden>

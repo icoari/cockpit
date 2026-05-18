@@ -88,12 +88,22 @@ async function fetchRSS(src) {
   return parseFeedXml(text, src);
 }
 
+// Titles matching these patterns are click-bait / commercial — filter them out
+// from the merged Articles feed to raise signal-to-noise.
+const LOW_QUALITY_TITLE = /\b(promo|bon\s*plan|soldes?|deal|code\s*promo|coupon|black\s*friday|cyber\s*monday|discount|giveaway|sponsored|à\s*\-?\d+\s*%)\b/i;
+
 async function fetchAll(category, searchQuery) {
   const cacheKey = searchQuery ? `feed_${category}_search_${searchQuery}` : `feed_${category}`;
   const cached = cacheGet(cacheKey, CACHE_TTL);
   if (cached) return cached.map(it => ({ ...it, date: new Date(it.date) }));
 
-  const sources = getSettings().aiSources.filter(s => s.enabled && (s.category || 'ai') === category);
+  // 'articles' = all enabled RSS sources (AI + tech), no HN. Otherwise filter
+  // strictly by the requested category.
+  const sources = getSettings().aiSources.filter(s => {
+    if (!s.enabled) return false;
+    if (category === 'articles') return s.type === 'rss';
+    return (s.category || 'ai') === category;
+  });
   const promises = sources.map(s => {
     if (s.type === 'hn-algolia') return fetchHN(category, searchQuery).catch(() => []);
     if (s.type === 'rss') return fetchRSS(s).catch(() => []);
@@ -123,6 +133,12 @@ async function fetchAll(category, searchQuery) {
 
   const cutoff = Date.now() - 30 * 86400 * 1000;
   items = items.filter(it => it.date.getTime() > cutoff);
+
+  // Quality filter: drop obvious click-bait / promo titles from the combined
+  // Articles feed. HN items always pass (they're already curated by points).
+  if (category === 'articles') {
+    items = items.filter(it => !LOW_QUALITY_TITLE.test(it.title));
+  }
 
   items.sort((a, b) => b.date - a.date);
   items = items.slice(0, 80);

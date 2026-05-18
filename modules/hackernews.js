@@ -5,12 +5,16 @@ import { escapeHTML, fetchWithTimeout, timeAgo, haptic } from './util.js';
 const CACHE_TTL = 10 * 60 * 1000;
 const API = 'https://hn.algolia.com/api/v1/search';
 
+const MIN_POINTS = 100;
+
 async function fetchTopStories() {
-  const cached = cacheGet('hn_top', CACHE_TTL);
+  const cached = cacheGet('hn_top_v2', CACHE_TTL);
   if (cached) return cached.map(s => ({ ...s, date: new Date(s.date) }));
 
-  // Front-page stories, today
-  const url = `${API}?tags=front_page&hitsPerPage=15`;
+  // Front-page stories from the last 48 h, kept above a quality threshold so
+  // the list stays substantive (Show HN drafts and 5-point items drop out).
+  const sinceTs = Math.floor((Date.now() - 48 * 3600 * 1000) / 1000);
+  const url = `${API}?tags=front_page&hitsPerPage=40&numericFilters=created_at_i>${sinceTs},points>${MIN_POINTS}`;
   const resp = await fetchWithTimeout(url, {}, 7000);
   if (!resp.ok) throw new Error(`Hacker News : HTTP ${resp.status}`);
   const data = await resp.json();
@@ -29,9 +33,9 @@ async function fetchTopStories() {
     })(),
   }));
   items.sort((a, b) => b.points - a.points);
-  const top10 = items.slice(0, 10);
-  cacheSet('hn_top', top10.map(s => ({ ...s, date: s.date.toISOString() })));
-  return top10;
+  const top = items.slice(0, 12);
+  cacheSet('hn_top_v2', top.map(s => ({ ...s, date: s.date.toISOString() })));
+  return top;
 }
 
 function renderStory(s) {
@@ -85,7 +89,7 @@ export class HackerNewsWidget {
       if (e.target.closest('[data-action="refresh"]')) {
         e.stopPropagation();
         haptic(6);
-        cacheBust('hn_top');
+        cacheBust('hn_top_v2');
         this.refresh();
         return;
       }

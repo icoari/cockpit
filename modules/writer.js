@@ -1,5 +1,7 @@
 import { ICONS } from './icons.js';
 import { escapeHTML, haptic, uid, debounce } from './util.js';
+import { streamCopilot } from './copilot.js';
+import { isConfigured as llmConfigured } from './llm.js';
 
 const KEY = 'bob-writer-v1';
 
@@ -145,6 +147,14 @@ export class WriterApp {
         </div>
         <div class="writer-edit">
           <input class="writer-edit__title" type="text" data-title value="${escapeHTML(c.title)}" placeholder="Titre du chapitre">
+          <div class="writer-copilot" data-copilot>
+            <button class="writer-copilot__btn" type="button" data-task="rephrase">Reformuler</button>
+            <button class="writer-copilot__btn" type="button" data-task="continue">Continuer</button>
+            <button class="writer-copilot__btn" type="button" data-task="tighten">Resserrer</button>
+            <button class="writer-copilot__btn" type="button" data-task="fix">Corriger</button>
+            <button class="writer-copilot__btn" type="button" data-task="twist">Retournement</button>
+            <span class="writer-copilot__status" data-copilot-status></span>
+          </div>
           <textarea class="writer-edit__content" data-content placeholder="Écris...">${escapeHTML(c.content)}</textarea>
         </div>
       </div>
@@ -153,6 +163,7 @@ export class WriterApp {
     const titleEl = this.container.querySelector('[data-title]');
     const contentEl = this.container.querySelector('[data-content]');
     const wordEl = this.container.querySelector('[data-word-count]');
+    const statusEl = this.container.querySelector('[data-copilot-status]');
 
     const onChange = () => {
       const c2 = this.current(); if (!c2) return;
@@ -168,12 +179,80 @@ export class WriterApp {
     titleEl.addEventListener('blur', () => this.save());
     contentEl.addEventListener('blur', () => this.save());
 
-    // Auto-grow textarea
     const adjust = () => {
       contentEl.style.height = 'auto';
       contentEl.style.height = contentEl.scrollHeight + 'px';
     };
     contentEl.addEventListener('input', adjust);
     setTimeout(adjust, 0);
+
+    // Copilot toolbar
+    this.container.querySelector('[data-copilot]').addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-task]');
+      if (!btn) return;
+      e.stopPropagation();
+      haptic(4);
+      if (!llmConfigured()) {
+        statusEl.textContent = 'Assistant non configuré (Réglages).';
+        return;
+      }
+      const task = btn.dataset.task;
+      await this.runCopilotTask(task, contentEl, statusEl, btn, adjust, onChange);
+    });
+  }
+
+  async runCopilotTask(task, contentEl, statusEl, btn, adjust, onChange) {
+    const selStart = contentEl.selectionStart;
+    const selEnd = contentEl.selectionEnd;
+    const full = contentEl.value;
+    const selection = full.slice(selStart, selEnd);
+    const context = full;
+
+    const needsSelection = ['rephrase', 'tighten', 'fix'].includes(task);
+    if (needsSelection && !selection.trim()) {
+      statusEl.textContent = 'Sélectionne d\'abord un passage.';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.classList.add('writer-copilot__btn--busy');
+    statusEl.textContent = 'En cours…';
+
+    // Position where the streamed output goes.
+    let insertStart, insertEnd;
+    if (task === 'continue' || task === 'twist') {
+      insertStart = selEnd;
+      insertEnd = selEnd;
+      // Insert a leading space/newline if needed
+      const prev = full.slice(insertStart - 1, insertStart);
+      const sep = prev && !/\s$/.test(prev) ? '\n\n' : '';
+      contentEl.value = full.slice(0, insertStart) + sep + full.slice(insertStart);
+      insertStart += sep.length;
+      insertEnd = insertStart;
+    } else {
+      insertStart = selStart;
+      insertEnd = selEnd;
+    }
+
+    let acc = '';
+    const baseBefore = contentEl.value.slice(0, insertStart);
+    const baseAfter = contentEl.value.slice(insertEnd);
+
+    try {
+      await streamCopilot(task, { selection, context }, (delta) => {
+        acc += delta;
+        contentEl.value = baseBefore + acc + baseAfter;
+        adjust();
+        onChange();
+      });
+      contentEl.setSelectionRange(insertStart, insertStart + acc.length);
+      statusEl.textContent = '✓ ' + acc.length + ' caractères';
+    } catch (e) {
+      statusEl.textContent = 'Échec : ' + (e.message || e);
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove('writer-copilot__btn--busy');
+      setTimeout(() => { statusEl.textContent = ''; }, 4000);
+    }
   }
 }

@@ -4,9 +4,6 @@ import { getSettings, updateSettings } from './modules/state.js';
 import { renderHeaderWeather } from './modules/weather.js';
 import { TrainsWidget } from './modules/trains.js';
 import { LastTrainWidget } from './modules/lastTrain.js';
-import { FeedWidget } from './modules/aiwatch.js';
-import { YoutubeWidget } from './modules/youtube.js';
-import { HackerNewsWidget } from './modules/hackernews.js';
 import { GasWidget } from './modules/gas.js';
 import { WeatherCard } from './modules/weatherCard.js';
 import { AirQualityWidget } from './modules/airquality.js';
@@ -15,6 +12,8 @@ import { BinsWidget } from './modules/bins.js';
 import { PharmaciesWidget } from './modules/pharmacies.js';
 import { SettingsPanel } from './modules/settings.js';
 import { WriterApp } from './modules/writer.js';
+import { ProWidget } from './modules/pro.js';
+import { analyzeHealth } from './modules/insights.js';
 
 // ---------- Theme ----------
 function applyTheme() {
@@ -105,12 +104,10 @@ function mountWidgets() {
   widgets.trainsAller  = new TrainsWidget(document.querySelector('[data-widget="trains-aller"]'), 'aller');
   widgets.trainsRetour = new TrainsWidget(document.querySelector('[data-widget="trains-retour"]'), 'retour');
   widgets.lastTrain    = new LastTrainWidget(document.querySelector('[data-widget="last-train"]'));
-  widgets.youtube      = new YoutubeWidget(document.querySelector('[data-widget="youtube"]'));
-  widgets.hackernews   = new HackerNewsWidget(document.querySelector('[data-widget="hackernews"]'));
-  widgets.articles     = new FeedWidget(document.querySelector('[data-widget="articles"]'), { category: 'articles', title: 'Articles tech & IA', placeholder: 'Rechercher dans les articles…' });
+  widgets.pro          = new ProWidget(document.querySelector('[data-widget="pro"]'));
 }
 
-// ---------- Sub-tabs (Pro pane) ----------
+// ---------- (legacy sub-tabs — replaced by ProWidget; left as a no-op stub) ----------
 function initSubtabs() {
   const buttons = document.querySelectorAll('[data-subtabs] .subtab');
   if (!buttons.length) return;
@@ -209,9 +206,6 @@ function openProject(name) {
   };
 
   if (name === 'health') {
-    // Pass current Bob theme so the health-tracker matches (light/dark/auto).
-    // Add a cache-buster so old SW-cached health-tracker code (without the
-    // theme handler) is forced to refresh on next open.
     const currentTheme = getSettings().theme || 'auto';
     const cacheBust = Date.now();
     inner.innerHTML = `
@@ -219,11 +213,30 @@ function openProject(name) {
         <div class="project-bar">
           <button class="project-bar__back" type="button" data-close>← Bob</button>
           <span class="project-bar__title">Suivi santé</span>
+          <button class="project-bar__action" type="button" data-action="analyze" aria-label="Analyse">${ICONS.lightbulb}</button>
         </div>
         <iframe class="project-frame" src="../health-tracker/?theme=${encodeURIComponent(currentTheme)}&_v=${cacheBust}" allow="vibrate"></iframe>
+        <div class="insights-overlay" hidden data-insights-overlay>
+          <div class="insights-panel">
+            <div class="insights-panel__head">
+              <span class="insights-panel__title">Analyse · Suivi santé</span>
+              <button class="insights-panel__close" type="button" data-action="close-analyze" aria-label="Fermer">${ICONS.close}</button>
+            </div>
+            <div class="insights-panel__body" data-insights-body>
+              <p class="insights-panel__placeholder">Lecture du journal…</p>
+            </div>
+            <div class="insights-panel__foot">
+              <span class="insights-panel__hint">Observations factuelles, aucun diagnostic.</span>
+            </div>
+          </div>
+        </div>
       </div>
     `;
     inner.querySelector('[data-close]').addEventListener('click', close);
+    inner.querySelector('[data-action="analyze"]').addEventListener('click', () => openHealthInsights(inner));
+    inner.querySelector('[data-action="close-analyze"]').addEventListener('click', () => {
+      inner.querySelector('[data-insights-overlay]').hidden = true;
+    });
     overlay.hidden = false;
     document.body.classList.add('project-open');
     return;
@@ -321,6 +334,50 @@ function initProjects() {
       openProject(card.dataset.project);
     }
   });
+}
+
+// ---------- Health insights panel (lives inside the Suivi santé project shell) ----------
+function tinyMarkdown(s) {
+  const escape = (str) => str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let html = escape(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/((?:^|\n)(?:- [^\n]+\n?)+)/g, (block) => {
+    const items = block.trim().split('\n').map(l => l.replace(/^- /, '')).map(li => `<li>${li}</li>`).join('');
+    return `\n<ul>${items}</ul>\n`;
+  });
+  html = html.replace(/\n{2,}/g, '</p><p>');
+  return `<p>${html}</p>`;
+}
+
+async function openHealthInsights(scope) {
+  const overlay = scope.querySelector('[data-insights-overlay]');
+  const body = scope.querySelector('[data-insights-body]');
+  overlay.hidden = false;
+  body.innerHTML = '<p class="insights-panel__placeholder">Lecture du journal…</p>';
+
+  let entries = {};
+  try {
+    const raw = localStorage.getItem('health-tracker-v1');
+    if (raw) entries = (JSON.parse(raw)?.entries) || {};
+  } catch {}
+
+  if (!Object.keys(entries).length) {
+    body.innerHTML = '<p class="insights-panel__placeholder">Aucune entrée à analyser pour l\'instant.</p>';
+    return;
+  }
+
+  body.innerHTML = '<p class="insights-panel__placeholder">Analyse en cours…</p>';
+  let acc = '';
+  try {
+    await analyzeHealth({
+      entries,
+      onChunk: (delta) => {
+        acc += delta;
+        body.innerHTML = tinyMarkdown(acc);
+      },
+    });
+  } catch (e) {
+    body.innerHTML = `<p class="insights-panel__placeholder" style="color:var(--danger)">Échec : ${e.message || e}</p>`;
+  }
 }
 
 // ---------- Init ----------

@@ -11,6 +11,8 @@ import {
   isSyncEnabled, getSyncMeta, setupSync, unlockSync,
   disableSyncLocally, wipeRemote, pullNow, schedulePush,
 } from './sync.js';
+import { ping as llmPing } from './llm.js';
+import { pushSources } from './feed.js';
 
 export class SettingsPanel {
   constructor(rootEl, onChange) {
@@ -42,6 +44,30 @@ export class SettingsPanel {
           <a href="https://prim.iledefrance-mobilites.fr/" target="_blank" rel="noopener">prim.iledefrance-mobilites.fr</a>.
         </div>
         <input class="input" type="password" placeholder="apikey IDFM…" data-field="idfmKey" value="${escapeHTML(s.idfm.apiKey)}">
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section__title">Assistant</div>
+        <div class="settings-section__desc">
+          Endpoint compatible OpenAI Chat Completions (Azure AI Foundry, LiteLLM proxy, OpenAI…).
+          Pour Azure, l'URL inclut <code>?api-version=…</code> et l'auth est <code>api-key</code>.
+        </div>
+        <input class="input" type="url" placeholder="https://…/chat/completions" data-field="llmEndpoint" value="${escapeHTML(s.llm?.endpoint || '')}">
+        <input class="input" type="password" placeholder="API key" data-field="llmApiKey" value="${escapeHTML(s.llm?.apiKey || '')}" autocomplete="off" spellcheck="false">
+        <input class="input" type="text" placeholder="Nom du modèle (vide pour Azure)" data-field="llmModel" value="${escapeHTML(s.llm?.model || '')}" autocomplete="off">
+        <label class="label-row" style="display:block;margin-top:6px">Authentification</label>
+        <select class="input" data-field="llmAuthStyle">
+          <option value="bearer" ${s.llm?.authStyle !== 'azure' ? 'selected' : ''}>Bearer (OpenAI / LiteLLM)</option>
+          <option value="azure"  ${s.llm?.authStyle === 'azure' ? 'selected' : ''}>api-key (Azure)</option>
+        </select>
+        <label class="label-row" style="display:block;margin-top:10px">
+          <input type="checkbox" data-field="llmEnabled" ${s.llm?.enabled ? 'checked' : ''}>
+          Activer l'assistant
+        </label>
+        <div class="btn-row" style="margin-top:10px">
+          <button class="btn btn--ghost" type="button" data-action="llm-ping">Tester</button>
+          <span class="settings-info" data-llm-status style="margin:0;padding:8px 12px;font-size:12px"></span>
+        </div>
       </div>
 
       <div class="settings-section">
@@ -184,7 +210,8 @@ export class SettingsPanel {
     this.root.querySelectorAll('[data-field]').forEach(el => {
       el.addEventListener('change', () => {
         const settings = getSettings();
-        const v = el.value;
+        const v = el.type === 'checkbox' ? el.checked : el.value;
+        if (!settings.llm) settings.llm = { enabled: false, endpoint: '', apiKey: '', model: '', authStyle: 'bearer' };
         switch (el.dataset.field) {
           case 'idfmKey':            settings.idfm.apiKey = v.trim(); break;
           case 'calendarClientId':   settings.calendar.clientId = v.trim(); break;
@@ -195,13 +222,18 @@ export class SettingsPanel {
           case 'gasRadius':          settings.gas.radiusKm = Math.max(1, parseInt(v, 10) || 8); break;
           case 'encombrantsAddress': settings.encombrants.address = v.trim(); break;
           case 'encombrantsPattern': settings.encombrants.pattern = v; break;
+          case 'llmEndpoint':        settings.llm.endpoint = v.trim(); break;
+          case 'llmApiKey':          settings.llm.apiKey = v.trim(); break;
+          case 'llmModel':           settings.llm.model = v.trim(); break;
+          case 'llmAuthStyle':       settings.llm.authStyle = v; break;
+          case 'llmEnabled':         settings.llm.enabled = !!v; break;
         }
         save();
         this.onChange();
       });
     });
 
-    this.root.addEventListener('click', (e) => {
+    this.root.addEventListener('click', async (e) => {
       const themeBtn = e.target.closest('[data-theme]');
       if (themeBtn) {
         getSettings().theme = themeBtn.dataset.theme;
@@ -255,6 +287,20 @@ export class SettingsPanel {
           resetAll();
           this.render();
           this.onChange();
+        }
+        return;
+      }
+      if (action === 'llm-ping') {
+        const statusEl = this.root.querySelector('[data-llm-status]');
+        statusEl.textContent = 'Test en cours…';
+        statusEl.style.color = '';
+        try {
+          const out = await llmPing();
+          statusEl.textContent = '✓ Réponse : ' + (out || '').slice(0, 60);
+          statusEl.style.color = 'var(--accent)';
+        } catch (err) {
+          statusEl.textContent = 'Échec : ' + (err.message || err);
+          statusEl.style.color = 'var(--danger)';
         }
         return;
       }

@@ -56,6 +56,13 @@ const DEFAULT_SETTINGS = {
     calendarId: 'primary',
     token: null,
   },
+  llm: {
+    enabled: false,
+    endpoint: '',
+    apiKey: '',
+    model: '',
+    authStyle: 'bearer',
+  },
   encombrants: {
     pattern: 'monthly-2nd-tuesday',
     extraDates: [],
@@ -281,12 +288,13 @@ function readLocalJSON(key) {
 
 export function exportData() {
   // Build a clean snapshot:
-  //  - omit calendar OAuth token (security: would leak an active access token)
+  //  - omit calendar OAuth token + LLM API key (would leak credentials)
   //  - omit volatile cache (recreated on first use)
   //  - include the writer chapters AND the health-tracker entries
   //    (both live in separate localStorage keys on the same origin)
   const snapshot = structuredClone(state);
   if (snapshot.settings?.calendar) snapshot.settings.calendar.token = null;
+  if (snapshot.settings?.llm)      snapshot.settings.llm.apiKey = '';
   delete snapshot.cache;
   return JSON.stringify({
     ...snapshot,

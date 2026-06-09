@@ -15,6 +15,7 @@ import { WriterApp } from './modules/writer.js';
 import { ProWidget } from './modules/pro.js';
 import { analyzeHealth } from './modules/insights.js';
 import { pushMonitoring } from './modules/notifications.js';
+import { TrackersWidget } from './modules/trackers.js';
 
 // ---------- Theme ----------
 function applyTheme() {
@@ -131,6 +132,7 @@ function mountWidgets() {
   widgets.trainsRetour = new TrainsWidget(document.querySelector('[data-widget="trains-retour"]'), 'retour');
   widgets.lastTrain    = new LastTrainWidget(document.querySelector('[data-widget="last-train"]'));
   widgets.pro          = new ProWidget(document.querySelector('[data-widget="pro"]'));
+  widgets.trackers     = new TrackersWidget(document.querySelector('[data-widget="trackers"]'));
 }
 
 // ---------- (legacy sub-tabs — replaced by ProWidget; left as a no-op stub) ----------

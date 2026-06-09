@@ -3074,6 +3074,85 @@ body.theme-light .hn-item:hover { background: rgba(20, 20, 30, 0.025); }
 }
 
 /* ============================================================
+   Trackers (Perso — discreet day-counters)
+   ============================================================ */
+.trackers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tracker {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--elev-1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.tracker__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tracker__icon svg { width: 16px; height: 16px; stroke-width: 1.7; }
+
+.tracker__body { min-width: 0; }
+
+.tracker__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.tracker__value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  margin-top: 1px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tracker__sub {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 1px;
+}
+
+.tracker__action {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 160ms var(--ease), background 160ms var(--ease), transform 220ms var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.tracker__action:hover { color: var(--accent); background: var(--surface-hover); border-color: var(--accent-glow); }
+.tracker__action:active { transform: scale(0.92); }
+.tracker__action svg { width: 13px; height: 13px; stroke-width: 1.8; }
+
+/* ============================================================
    Pro page v2 — editorial daily digest
    ============================================================ */
 .pro2-shell {

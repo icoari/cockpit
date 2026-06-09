@@ -128,12 +128,20 @@ export async function pushMonitoring() {
   if (!auth) return;
   const s = getSettings();
   const alerts = s.alerts || {};
+  // Public IDFM stop coords (WGS84 conversion of Lambert93 stop_area positions).
+  // Worker uses these to ask the journey planner for tonight's last departure.
+  const stops = s.idfm?.stopCoords || {
+    paris:   { lat: 48.8757,    lon: 2.3247    },  // Saint-Lazare / Auber area
+    home:    { lat: 48.991156,  lon: 2.074643  },  // Conflans Fin d'Oise
+    homeAlt: { lat: 48.996915,  lon: 2.098717  },  // Conflans-Sainte-Honorine
+  };
   const body = {
     idfmKey: s.idfm?.apiKey || '',
     idfmLines: [
       s.idfm?.lines?.transilienJ,
       s.idfm?.lines?.rerA,
     ].filter(Boolean),
+    stops,
     alerts: {
       trainAlerts:     alerts.trainAlerts     !== false,
       morningBrief:    alerts.morningBrief    !== false,

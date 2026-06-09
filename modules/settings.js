@@ -200,10 +200,13 @@ export class SettingsPanel {
           Push iOS via Web Push standard. <strong>Bob doit être ajouté à l'écran d'accueil</strong> pour que ça fonctionne sur iPhone.
         </div>
         <div id="pushStatus" class="settings-info" style="margin:0 0 10px;padding:8px 12px;font-size:12px">Chargement…</div>
-        <div class="btn-row" style="margin-bottom:14px">
+        <div class="btn-row" style="margin-bottom:10px">
           <button class="btn" type="button" data-action="push-enable">Activer</button>
           <button class="btn btn--ghost" type="button" data-action="push-test">Tester</button>
           <button class="btn btn--danger" type="button" data-action="push-disable">Désactiver</button>
+        </div>
+        <div class="btn-row" style="margin-bottom:14px">
+          <button class="btn btn--ghost" type="button" data-action="check-trains-now">Vérifier les trains ce soir</button>
         </div>
         <label class="label-row" style="display:block;margin-top:6px">
           <input type="checkbox" data-field="alertTrains" ${s.alerts?.trainAlerts !== false ? 'checked' : ''}>
@@ -350,6 +353,30 @@ export class SettingsPanel {
         await unsubscribePush();
         statusEl.textContent = 'Notifications désactivées.';
         statusEl.style.color = '';
+        return;
+      }
+      if (action === 'check-trains-now') {
+        const statusEl = this.root.querySelector('#pushStatus');
+        statusEl.textContent = 'Vérification ce soir + perturbations en cours…';
+        statusEl.style.color = '';
+        try {
+          await pushMonitoring();
+          const auth = { 'Authorization': 'Bearer ' + (JSON.parse(localStorage.getItem('bob-sync-v1') || '{}').authToken || '') };
+          const [r1, r2] = await Promise.all([
+            fetch('https://bob.jz7w76ry59.workers.dev/cron/run?task=last-trains', { method: 'POST', headers: auth }),
+            fetch('https://bob.jz7w76ry59.workers.dev/cron/run?task=disruptions', { method: 'POST', headers: auth }),
+          ]);
+          if (r1.ok && r2.ok) {
+            statusEl.textContent = '✓ Vérifié. S\'il y a quelque chose à signaler, une notif arrive.';
+            statusEl.style.color = 'var(--accent)';
+          } else {
+            statusEl.textContent = `Erreur HTTP ${r1.status}/${r2.status}`;
+            statusEl.style.color = 'var(--danger)';
+          }
+        } catch (err) {
+          statusEl.textContent = 'Échec : ' + (err.message || err);
+          statusEl.style.color = 'var(--danger)';
+        }
         return;
       }
       if (action === 'push-test') {

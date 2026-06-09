@@ -18,6 +18,7 @@ const KEY_PUSH = KV_PREFIX + 'push';
 const KEY_MONITORING = KV_PREFIX + 'monitoring';
 const KEY_ALERTED_DISRUPTIONS = KV_PREFIX + 'alertedDisruptions';
 const KEY_HEALTH_PING = KV_PREFIX + 'healthPing';
+const KEY_LAST_TRAIN_ALERTED = KV_PREFIX + 'lastTrainAlerted';
 
 // Curated baseline sources merged with the user's own — these stay fresh
 // even before the user has configured anything on a new device.
@@ -63,6 +64,7 @@ export default {
 
       if (p === '/monitoring')          return await handleMonitoring(request, env);
       if (p === '/health/ping')         return assertMethod(request, 'POST', () => handleHealthPing(request, env));
+      if (p === '/cron/run')            return assertMethod(request, 'POST', () => handleCronRun(request, env, url));
 
       if (p === '/llm')                 return assertMethod(request, 'POST', () => handleLlm(request, env));
 
@@ -73,14 +75,15 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    // Dispatch by cron expression — wrangler.toml lists 4 schedules.
     const cron = event.cron;
     if (cron === '*/10 * * * *') {
       ctx.waitUntil(aggregateFeed(env));
     } else if (cron === '*/5 6-23 * * *') {
       ctx.waitUntil(checkDisruptions(env));
-    } else if (cron === '0 6 * * *') {
+    } else if (cron === '0 5 * * *') {
       ctx.waitUntil(sendMorningBriefPush(env));
+    } else if (cron === '0 16 * * *') {
+      ctx.waitUntil(checkLastTrainsTonight(env));
     } else if (cron === '0 21 * * *') {
       ctx.waitUntil(sendHealthReminder(env));
     }
@@ -342,6 +345,20 @@ async function handlePushTest(request, env) {
 // channels list (plaintext in user-owned KV).
 // ====================================================================
 
+async function handleCronRun(request, env, url) {
+  if (!await verifyAuth(request, env)) return json({ error: 'unauthorized' }, 401);
+  const task = url.searchParams.get('task') || '';
+  switch (task) {
+    case 'feed':         await aggregateFeed(env); break;
+    case 'disruptions':  await checkDisruptions(env); break;
+    case 'last-trains':  await checkLastTrainsTonight(env); break;
+    case 'brief':        await sendMorningBriefPush(env); break;
+    case 'health':       await sendHealthReminder(env); break;
+    default: return json({ error: 'unknown task' }, 400);
+  }
+  return json({ ok: true, task });
+}
+
 async function handleHealthPing(request, env) {
   if (!await verifyAuth(request, env)) return json({ error: 'unauthorized' }, 401);
   let body;
@@ -517,13 +534,26 @@ function lineMnemonic(lineId) {
   return 'Ligne';
 }
 
-function isImpactful(d) {
-  const severity = (d.severity?.effect || d.severity?.name || '').toLowerCase();
-  if (severity.includes('no_service') || severity.includes('blocking')
-      || severity.includes('reduced_service') || severity.includes('detour')
-      || severity.includes('significant_delays')) return true;
-  // Fall back to status heuristics.
-  return (d.status || '').toLowerCase() === 'active';
+// Permissive filter: surface any disruption with a user-facing message and
+// an application period that's active right now or starting within ~12 h.
+// Severity classifications from IDFM are inconsistent (planned engineering
+// works often land under REDUCED_SERVICE or just have no severity at all),
+// so we trust the human message and the time window.
+function isImpactful(d, withinHours = 12) {
+  const text = (d.messages?.[0]?.text || '').trim();
+  if (!text) return false;
+
+  const now = Date.now();
+  const cutoff = now + withinHours * 3600 * 1000;
+  const periods = d.application_periods || [];
+  if (periods.length === 0) return true;
+
+  for (const p of periods) {
+    const start = parseNavitiaDate(p.begin);
+    const end   = parseNavitiaDate(p.end);
+    if ((!start || start <= cutoff) && (!end || end >= now)) return true;
+  }
+  return false;
 }
 
 function compactDisruptionText(d) {
@@ -538,6 +568,106 @@ function parseNavitiaDate(s) {
   const m = s.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/);
   if (!m) return null;
   return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+}
+
+// Daily 18 h Paris check — asks the journey planner for tonight's LAST
+// arrival home on each line and warns the user if it lands significantly
+// earlier than usual (engineering works, last-train-of-night cuts that
+// the disruption API often hides).
+async function checkLastTrainsTonight(env) {
+  const mon = await getMonitoring(env);
+  if (mon.alerts?.trainAlerts === false) return;
+  if (!mon.idfmKey || !mon.stops?.paris || !mon.stops?.home) return;
+
+  const lineJ    = 'line:IDFM:C01739';
+  const lineRerA = 'line:IDFM:C01742';
+  const dt = navitiaDt(new Date());
+
+  const probes = [
+    { label: 'Transilien J',  dest: 'Conflans FdO', line: lineJ,    from: mon.stops.paris,    to: mon.stops.home,    earlyThreshold: 23 * 60 + 30 },
+    { label: 'RER A',         dest: 'Conflans FdO', line: lineRerA, from: mon.stops.paris,    to: mon.stops.home,    earlyThreshold: 23 * 60 + 45 },
+  ];
+  if (mon.stops.homeAlt) {
+    probes.push({ label: 'Transilien J', dest: 'Conflans SH', line: lineJ, from: mon.stops.paris, to: mon.stops.homeAlt, earlyThreshold: 23 * 60 + 30 });
+  }
+
+  const results = await Promise.all(probes.map(p => lastJourneyTonight(mon.idfmKey, p, dt).catch(() => null)));
+
+  const findings = [];
+  for (let i = 0; i < probes.length; i++) {
+    const r = results[i];
+    if (!r || !r.depart) {
+      // No journey returned at all — that itself is a flag.
+      findings.push({ probe: probes[i], type: 'none', text: 'aucun départ trouvé ce soir' });
+      continue;
+    }
+    const m = r.depart.getHours() * 60 + r.depart.getMinutes();
+    if (m < probes[i].earlyThreshold) {
+      findings.push({
+        probe: probes[i],
+        type: 'early',
+        text: `dernier départ ${fmtHourMin(r.depart)}`,
+        depart: r.depart,
+      });
+    }
+  }
+
+  if (findings.length === 0) return;
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const alertedRaw = await env.KV.get(KEY_LAST_TRAIN_ALERTED);
+  const alerted = alertedRaw ? JSON.parse(alertedRaw) : {};
+  // Reset alerted map daily — keep only today's entry to bound size.
+  const stillAlerted = alerted[todayKey] || {};
+  const sig = findings.map(f => `${f.probe.label}-${f.probe.dest}-${f.type}`).join('|');
+  if (stillAlerted.sig === sig) return;  // identical alert already sent today
+
+  const summary = findings.map(f => `${f.probe.label} → ${f.probe.dest} : ${f.text}`).join(' · ');
+  await pushOne(env, {
+    title: 'Trains ce soir',
+    body: summary.slice(0, 220),
+    tag: 'bob-last-trains',
+    url: '/?goto=trains',
+  }, { urgency: 'high', ttl: 8 * 3600 });
+
+  await env.KV.put(KEY_LAST_TRAIN_ALERTED, JSON.stringify({ [todayKey]: { sig, ts: Date.now() } }));
+}
+
+async function lastJourneyTonight(apiKey, probe, dt) {
+  const url = `https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia/journeys`
+            + `?from=${probe.from.lon};${probe.from.lat}`
+            + `&to=${probe.to.lon};${probe.to.lat}`
+            + `&datetime=${dt}`
+            + `&allowed_id[]=${encodeURIComponent(probe.line)}`
+            + `&count=50`;
+  const r = await fetch(url, { headers: { 'apikey': apiKey } });
+  if (!r.ok) return null;
+  const data = await r.json();
+  const journeys = data.journeys || [];
+  if (journeys.length === 0) return null;
+  const last = journeys[journeys.length - 1];
+  return {
+    depart: parseNavitiaDateObj(last.departure_date_time),
+    arrive: parseNavitiaDateObj(last.arrival_date_time),
+  };
+}
+
+function parseNavitiaDateObj(s) {
+  if (!s) return null;
+  const m = s.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/);
+  if (!m) return null;
+  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+}
+
+function fmtHourMin(d) {
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+function navitiaDt(d) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 }
 
 // ====================================================================

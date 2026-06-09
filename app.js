@@ -14,6 +14,7 @@ import { SettingsPanel } from './modules/settings.js';
 import { WriterApp } from './modules/writer.js';
 import { ProWidget } from './modules/pro.js';
 import { analyzeHealth } from './modules/insights.js';
+import { pushMonitoring } from './modules/notifications.js';
 
 // ---------- Theme ----------
 function applyTheme() {
@@ -441,6 +442,10 @@ initTabs();
 initSubtabs();
 initSettings();
 initProjects();
+
+// Keep the Worker's monitoring config in sync with the current settings
+// (IDFM key, alert toggles, stop coords). Fire-and-forget on startup.
+pushMonitoring();
 
 // ---------- Service worker registration (moved from inline script for CSP) ----------
 if ('serviceWorker' in navigator) {

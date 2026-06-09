@@ -15,9 +15,10 @@ VAPID_SUBJECT    = "mailto:bob@icoari.dev"
 [triggers]
 crons = [
   "*/10 * * * *",    # feed aggregation
-  "*/5 6-23 * * *",  # train + perturbations watch (every 5 min, 6h-23h)
-  "0 6 * * *",       # morning brief notification (7h local Paris = 6h UTC summer)
-  "0 21 * * *",      # health-tracker reminder (23h local = 21h UTC summer; covers the soir slot)
+  "*/5 6-23 * * *",  # IDFM disruption watch
+  "0 5 * * *",       # morning brief push (7h Paris summer / 6h winter)
+  "0 16 * * *",      # last-train-of-tonight check (18h Paris summer / 17h winter)
+  "0 21 * * *",      # health-tracker evening reminder (23h Paris summer)
 ]
 
 # R2 binding — uncomment after enabling R2 in the Cloudflare dashboard,

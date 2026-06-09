@@ -42,13 +42,14 @@
         <p class="page-header__eyebrow" id="pageSection">Perso</p>
         <h1 class="page-header__title" id="dateLabel">samedi 16 mai</h1>
       </div>
-      <button class="weather-chip" id="weatherMini" type="button" aria-label="Météo">
-        <span class="weather-chip__icon" id="weatherIcon"></span>
-        <span class="weather-chip__temp" id="weatherTemp">—</span>
-      </button>
+      <button class="header-cog" id="headerCog" type="button" aria-label="Réglages" data-icon="settings"></button>
     </header>
 
-    <section class="pane" data-pane="perso">
+    <section class="pane" data-pane="home" hidden>
+      <div class="widget" data-widget="home"></div>
+    </section>
+
+    <section class="pane" data-pane="perso" hidden>
       <div class="widget" data-widget="weatherCard"></div>
       <div class="widget" data-widget="calendar"></div>
       <div class="widget" data-widget="gas"></div>
@@ -126,6 +127,10 @@
   </main>
 
   <nav class="tabbar">
+    <button class="tabbar-btn" data-tab="home" type="button">
+      <span class="tabbar-btn__icon" data-icon="sun"></span>
+      <span class="tabbar-btn__label">Accueil</span>
+    </button>
     <button class="tabbar-btn" data-tab="perso" type="button">
       <span class="tabbar-btn__icon" data-icon="home"></span>
       <span class="tabbar-btn__label">Perso</span>
@@ -141,10 +146,6 @@
     <button class="tabbar-btn" data-tab="projets" type="button">
       <span class="tabbar-btn__icon" data-icon="layers"></span>
       <span class="tabbar-btn__label">Projets</span>
-    </button>
-    <button class="tabbar-btn" data-tab="settings" type="button">
-      <span class="tabbar-btn__icon" data-icon="settings"></span>
-      <span class="tabbar-btn__label">Réglages</span>
     </button>
   </nav>
 

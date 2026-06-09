@@ -209,7 +209,283 @@ button {
 
 .pane[hidden] { display: none; }
 
-/* Trains pane — diagram on top, widgets ordered by proximity below
+/* Swipe transitions — slide-in when changing tabs via gesture */
+body.swipe-next .pane:not([hidden]) {
+  animation: paneSwipeFromRight 280ms var(--ease-out);
+}
+body.swipe-prev .pane:not([hidden]) {
+  animation: paneSwipeFromLeft 280ms var(--ease-out);
+}
+@keyframes paneSwipeFromRight {
+  from { opacity: 0; transform: translateX(28px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes paneSwipeFromLeft {
+  from { opacity: 0; transform: translateX(-28px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ============================================================
+   Accueil — assistant dashboard
+   ============================================================ */
+.home-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* Greeting card */
+.home-greeting {
+  position: relative;
+  padding: 22px 24px 24px;
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(127, 209, 185, 0.10), transparent 55%),
+    radial-gradient(120% 100% at 100% 100%, rgba(146, 132, 220, 0.10), transparent 55%),
+    var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--elev-1);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  overflow: hidden;
+  animation: homeIn 420ms var(--ease-out) backwards;
+}
+.home-greeting::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 24px; right: 24px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+  pointer-events: none;
+}
+body.theme-light .home-greeting::before {
+  background: linear-gradient(90deg, transparent, rgba(20, 20, 30, 0.10), transparent);
+}
+
+.home-greeting__eyebrow {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.home-greeting__body {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.home-greeting__body p { margin: 0; }
+.home-greeting__body strong { font-weight: 700; }
+
+.home-greeting__placeholder {
+  color: var(--text-faint);
+  font-style: italic;
+  margin: 0;
+}
+
+.home-greeting__refresh {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 30px;
+  height: 30px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 220ms var(--ease), color 160ms var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.home-greeting__refresh svg { width: 13px; height: 13px; }
+.home-greeting__refresh:active { transform: rotate(180deg); }
+.home-greeting__refresh--busy svg { animation: gearSpin 1.4s linear infinite; }
+@keyframes gearSpin { to { transform: rotate(360deg); } }
+
+/* Quick tiles */
+.home-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  animation: homeIn 480ms var(--ease-out) 60ms backwards;
+}
+
+.home-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  min-width: 0;
+  box-shadow: var(--elev-1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.home-tile__label {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.home-tile__value {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-tile__sub {
+  font-size: 10.5px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.005em;
+}
+
+/* Sections */
+.home-section {
+  animation: homeIn 540ms var(--ease-out) 120ms backwards;
+}
+
+.home-section__head {
+  display: flex;
+  align-items: baseline;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.home-section__label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.home-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Prio items */
+.home-prio {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  text-decoration: none;
+  color: inherit;
+  transition: background 180ms var(--ease), border-color 180ms var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.home-prio:hover { background: var(--surface-hover); border-color: var(--border-strong); }
+
+.home-prio__source {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.home-prio__title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.home-prio__why {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.home-empty {
+  font-size: 13px;
+  color: var(--text-dim);
+  padding: 12px 0;
+}
+.home-empty strong { color: var(--text); }
+
+/* Projects list */
+.home-projects {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.home-project {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  text-align: left;
+  font-family: inherit;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 180ms var(--ease), border-color 180ms var(--ease), transform 180ms var(--ease);
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+}
+.home-project:hover { background: var(--surface-hover); border-color: var(--border-strong); transform: translateX(2px); }
+.home-project:active { transform: scale(0.998); }
+
+.home-project::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 12px; bottom: 12px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+.home-project--p-health::before { background: var(--p-health); }
+.home-project--p-writer::before { background: var(--p-writer); }
+.home-project--p-beiue::before  { background: var(--p-beiue); }
+
+.home-project__label {
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  padding-left: 8px;
+}
+.home-project__sub {
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.005em;
+}
+
+@keyframes homeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
    (defaults to "aller" first = morning use case). When the user's
    location is clearly Paris, retour gets surfaced first. */
 .pane[data-pane="trains"] [data-route-diagram]         { order: 0; }
@@ -462,7 +738,34 @@ body.loc-paris .route-diagram__pulse {
 
 .page-header__title::first-letter { text-transform: uppercase; }
 
-/* Weather chip */
+/* Header gear button (replaces the old weather chip) */
+.header-cog {
+  width: 40px;
+  height: 40px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 200ms var(--ease), background 200ms var(--ease), transform 360ms var(--ease);
+  box-shadow: var(--elev-1);
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+.header-cog svg { width: 18px; height: 18px; stroke-width: 1.6; }
+.header-cog:hover { color: var(--accent); background: var(--surface-hover); }
+.header-cog:active { transform: rotate(60deg); }
+body.on-settings .header-cog {
+  background: var(--accent-soft);
+  border-color: var(--accent-glow);
+  color: var(--accent);
+  transform: rotate(60deg);
+}
+
+/* Weather chip (kept for any legacy usage) */
 .weather-chip {
   display: inline-flex;
   align-items: center;

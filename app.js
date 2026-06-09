@@ -2,7 +2,7 @@ import { ICONS } from './modules/icons.js';
 import { formatDateLong, haptic } from './modules/util.js';
 import { getSettings, updateSettings, importData, buildSyncPayload } from './modules/state.js';
 import { startupReconcile, pullIfNewer } from './modules/sync.js';
-import { renderHeaderWeather } from './modules/weather.js';
+import { HomeWidget } from './modules/home.js';
 import { TrainsWidget } from './modules/trains.js';
 import { LastTrainWidget } from './modules/lastTrain.js';
 import { GasWidget } from './modules/gas.js';
@@ -39,33 +39,32 @@ function applyTheme() {
 // ---------- Page header ----------
 function renderHeader() {
   document.getElementById('dateLabel').textContent = formatDateLong(new Date());
-  renderHeaderWeather(
-    document.getElementById('weatherIcon'),
-    null,
-    null,
-    document.getElementById('weatherTemp'),
-  );
 }
 
 // ---------- Tabs ----------
-const TAB_LABELS = { perso: 'Perso', trains: 'Trains', pro: 'Pro', projets: 'Projets', settings: 'Réglages' };
+const VISIBLE_TABS = ['home', 'perso', 'trains', 'pro', 'projets'];
+const TAB_LABELS = { home: 'Accueil', perso: 'Perso', trains: 'Trains', pro: 'Pro', projets: 'Projets', settings: 'Réglages' };
+let prevTabBeforeSettings = null;
 
-function setActiveTab(name) {
+function setActiveTab(name, opts = {}) {
+  if (name === 'settings') {
+    const cur = getSettings().activeTab;
+    if (cur && cur !== 'settings') prevTabBeforeSettings = cur;
+  }
   document.querySelectorAll('.tabbar-btn').forEach(b => {
     b.classList.toggle('tabbar-btn--active', b.dataset.tab === name);
   });
   document.querySelectorAll('.pane').forEach(p => {
     p.hidden = p.dataset.pane !== name;
   });
-  // Page header: hide on settings (settings has its own implicit header via sections)
-  const header = document.querySelector('[data-page-header]');
-  if (header) header.hidden = (name === 'settings');
+  document.body.classList.toggle('on-settings', name === 'settings');
 
   document.getElementById('pageSection').textContent = TAB_LABELS[name] || '';
   updateSettings({ activeTab: name });
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (name === 'projets') refreshProjectStats();
   if (name === 'trains')  prioritizeTrainsByLocation();
+  if (name === 'home' && widgets.home) widgets.home.refresh();
 }
 
 // ---------- Trains ordering ----------
@@ -102,9 +101,6 @@ function initTabs() {
       e.stopPropagation();
       haptic(4);
       setActiveTab(btn.dataset.tab);
-      // iOS ghost-click guard: after a fast tab switch, the synthesized click
-      // from the same tap can land on a link in the freshly rendered pane.
-      // Block pointer events on the content briefly to absorb it.
       const main = document.querySelector('.app');
       if (main) {
         main.style.pointerEvents = 'none';
@@ -113,7 +109,21 @@ function initTabs() {
     });
   });
 
-  const saved = getSettings().activeTab || 'perso';
+  // Gear icon in the header opens settings (which no longer lives in the tabbar)
+  const cog = document.getElementById('headerCog');
+  if (cog) {
+    cog.addEventListener('click', () => {
+      haptic(4);
+      if (getSettings().activeTab === 'settings') {
+        setActiveTab(prevTabBeforeSettings || 'home');
+      } else {
+        setActiveTab('settings');
+      }
+    });
+  }
+
+  let saved = getSettings().activeTab || 'home';
+  if (!VISIBLE_TABS.includes(saved) && saved !== 'settings') saved = 'home';
   setActiveTab(saved);
 }
 
@@ -134,6 +144,65 @@ function mountWidgets() {
   widgets.lastTrain    = new LastTrainWidget(document.querySelector('[data-widget="last-train"]'));
   widgets.pro          = new ProWidget(document.querySelector('[data-widget="pro"]'));
   widgets.trackers     = new TrackersWidget(document.querySelector('[data-widget="trackers"]'));
+  widgets.home         = new HomeWidget(document.querySelector('[data-widget="home"]'));
+}
+
+// ---------- Swipe navigation between tabs ----------
+function initSwipeNavigation() {
+  const SWIPE_X_MIN = 70;
+  const SWIPE_RATIO = 1.5;
+  const MAX_DURATION = 600;
+  let start = null;
+  let cancelled = false;
+
+  const isExcluded = (el) => {
+    if (!el) return false;
+    // Ignore swipes that originated in interactive controls or horizontally
+    // scrollable bits (chip rows, input pickers, etc.)
+    return !!el.closest('input, textarea, select, button, a, [data-no-swipe], .pro2-later, .modal');
+  };
+
+  document.addEventListener('touchstart', (e) => {
+    cancelled = false;
+    if (e.touches.length !== 1) { cancelled = true; return; }
+    if (document.body.classList.contains('project-open')) { cancelled = true; return; }
+    if (isExcluded(e.target)) { cancelled = true; return; }
+    const t = e.touches[0];
+    start = { x: t.clientX, y: t.clientY, time: Date.now() };
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!start || cancelled) return;
+    const t = e.touches[0];
+    const dy = Math.abs(t.clientY - start.y);
+    const dx = Math.abs(t.clientX - start.x);
+    if (dy > 30 && dy > dx) cancelled = true;  // user is scrolling vertically
+  }, { passive: true });
+
+  document.addEventListener('touchend', (e) => {
+    if (!start || cancelled) { start = null; return; }
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    const dt = Date.now() - start.time;
+    start = null;
+    if (dt > MAX_DURATION) return;
+    if (Math.abs(dx) < SWIPE_X_MIN) return;
+    if (Math.abs(dx) < Math.abs(dy) * SWIPE_RATIO) return;
+
+    const cur = getSettings().activeTab;
+    if (cur === 'settings') return;          // swipe doesn't traverse settings
+    const idx = VISIBLE_TABS.indexOf(cur);
+    if (idx === -1) return;
+    const newIdx = dx > 0 ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= VISIBLE_TABS.length) return;
+
+    document.body.classList.remove('swipe-prev', 'swipe-next');
+    document.body.classList.add(dx > 0 ? 'swipe-prev' : 'swipe-next');
+    setTimeout(() => document.body.classList.remove('swipe-prev', 'swipe-next'), 350);
+    haptic(3);
+    setActiveTab(VISIBLE_TABS[newIdx]);
+  }, { passive: true });
 }
 
 // ---------- (legacy sub-tabs — replaced by ProWidget; left as a no-op stub) ----------
@@ -468,6 +537,13 @@ initTabs();
 initSubtabs();
 initSettings();
 initProjects();
+initSwipeNavigation();
+
+// Project cards on the Home page send a custom event — route it through openProject.
+document.addEventListener('bob-open-project', (e) => {
+  const name = e.detail?.project;
+  if (name === 'health' || name === 'writer' || name === 'beiue') openProject(name);
+});
 
 // Keep the Worker's monitoring config in sync with the current settings
 // (IDFM key, alert toggles, stop coords). Fire-and-forget on startup.

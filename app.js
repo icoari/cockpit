@@ -63,6 +63,29 @@ function setActiveTab(name) {
   updateSettings({ activeTab: name });
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (name === 'projets') refreshProjectStats();
+  if (name === 'trains')  prioritizeTrainsByLocation();
+}
+
+// ---------- Trains ordering ----------
+async function prioritizeTrainsByLocation() {
+  document.body.classList.remove('loc-paris', 'loc-home');
+  try {
+    const { getPosition, distanceKm } = await import('./modules/geolocation.js');
+    const pos = await getPosition({ timeout: 4500 });
+    if (!pos) return;
+    const stops = getSettings().idfm?.stopCoords || {
+      paris: { lat: 48.8757, lon: 2.3247 },
+      home:  { lat: 48.991156, lon: 2.074643 },
+    };
+    const dHome  = distanceKm(pos, stops.home);
+    const dParis = distanceKm(pos, stops.paris);
+    // Heuristic: clearly Paris vs clearly home, otherwise leave default order.
+    if (dParis < 12 && dHome > 15) {
+      document.body.classList.add('loc-paris');
+    } else if (dHome < 6 && dParis > 25) {
+      document.body.classList.add('loc-home');
+    }
+  } catch {}
 }
 
 function initTabs() {

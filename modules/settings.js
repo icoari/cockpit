@@ -9,7 +9,7 @@ import { ENCOMBRANTS_PATTERNS } from './bins.js';
 import { escapeHTML } from './util.js';
 import {
   isSyncEnabled, getSyncMeta, setupSync, unlockSync,
-  disableSyncLocally, wipeRemote, pullNow, schedulePush,
+  disableSyncLocally, wipeRemote, pullNow, pushNow, schedulePush,
 } from './sync.js';
 import { ping as llmPing } from './llm.js';
 import { pushSources } from './feed.js';
@@ -470,6 +470,7 @@ export class SettingsPanel {
       return `
         <div class="settings-info">✓ Activé sur cet appareil · dernière sync : ${escapeHTML(last)}</div>
         <div class="btn-row">
+          <button class="btn" type="button" data-action="sync-now">Synchroniser maintenant</button>
           <button class="btn btn--ghost" type="button" data-action="sync-pull">Restaurer depuis le cloud</button>
           <button class="btn btn--ghost" type="button" data-action="sync-disable-local">Oublier sur cet appareil</button>
           <button class="btn btn--danger" type="button" data-action="sync-wipe">Effacer du cloud</button>
@@ -494,6 +495,7 @@ export class SettingsPanel {
       if (action === 'sync-setup') return this.runSetup();
       if (action === 'sync-unlock') return this.runUnlock();
       if (action === 'sync-pull') return this.runPull();
+      if (action === 'sync-now') return this.runPushNow();
       if (action === 'sync-disable-local') return this.runDisableLocal();
       if (action === 'sync-wipe') return this.runWipe();
     });
@@ -534,6 +536,16 @@ export class SettingsPanel {
       }
     } catch (err) {
       alert('Déverrouillage échoué : ' + (err.message || err));
+    }
+  }
+
+  async runPushNow() {
+    try {
+      await pushNow(buildSyncPayload);
+      this.render();
+      this.onChange();
+    } catch (err) {
+      alert('Échec de la synchro : ' + (err.message || err));
     }
   }
 

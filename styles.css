@@ -209,6 +209,16 @@ button {
 
 .pane[hidden] { display: none; }
 
+/* Trains pane — order the widgets by proximity (defaults to "aller" first
+   = morning use case). When the user's location is clearly Paris, retour
+   gets surfaced first. */
+.pane[data-pane="trains"] [data-widget="trains-aller"]  { order: 1; }
+.pane[data-pane="trains"] [data-widget="trains-retour"] { order: 2; }
+.pane[data-pane="trains"] [data-widget="last-train"]    { order: 3; }
+
+body.loc-paris .pane[data-pane="trains"] [data-widget="trains-aller"]  { order: 2; }
+body.loc-paris .pane[data-pane="trains"] [data-widget="trains-retour"] { order: 1; }
+
 /* ============================================================
    Sub-tabs (used inside the Pro pane)
    ============================================================ */
@@ -3075,43 +3085,23 @@ body.theme-light .hn-item:hover { background: rgba(20, 20, 30, 0.025); }
   -webkit-backdrop-filter: none;
 }
 
-.pro2-head {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 6px 4px 22px;
-  margin-bottom: 4px;
-  position: relative;
-}
-
-.pro2-head__date {
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-
-.pro2-head__title {
-  font-size: 38px;
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  color: var(--text);
-  line-height: 1.0;
-  margin: 0;
-}
-
-.pro2-head__meta {
+.pro2-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 8px;
-  padding-top: 14px;
-  border-top: 1px solid var(--hairline);
+  padding: 4px 2px 18px;
   font-size: 12px;
   color: var(--text-dim);
   letter-spacing: -0.005em;
+}
+
+.pro2-toolbar__meta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pro2-refresh {

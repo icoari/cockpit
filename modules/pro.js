@@ -85,17 +85,12 @@ export class ProWidget {
   }
 
   render() {
-    const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
     this.container.innerHTML = `
-      <header class="pro2-head">
-        <div class="pro2-head__date">${escapeHTML(today)}</div>
-        <h2 class="pro2-head__title">Aujourd'hui</h2>
-        <div class="pro2-head__meta">
-          <span data-meta>—</span>
-          <button class="pro2-refresh" data-action="refresh" type="button" aria-label="Rafraîchir l'éditorial">${ICONS.refresh}</button>
-        </div>
-      </header>
       <div class="pro2-context" data-context hidden></div>
+      <div class="pro2-toolbar">
+        <span class="pro2-toolbar__meta" data-meta>—</span>
+        <button class="pro2-refresh" data-action="refresh" type="button" aria-label="Rafraîchir l'éditorial">${ICONS.refresh}</button>
+      </div>
       <div class="pro2-body" data-body></div>
     `;
   }

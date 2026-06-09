@@ -142,6 +142,16 @@ async function runPush() {
   }
 }
 
+// Force-push the current snapshot immediately, bypassing the 5 s debounce.
+export async function pushNow(buildPayload) {
+  if (!isSyncEnabled()) throw new Error('Sync non activée.');
+  pushPending = buildPayload;
+  clearTimeout(pushTimer);
+  await runPush();
+  const local = readLocal();
+  return { updatedAt: local?.lastPushedAt || null };
+}
+
 // Force-pull the remote blob (e.g. on startup or via a manual button).
 export async function pullNow() {
   if (!isSyncEnabled()) return null;

@@ -100,7 +100,6 @@ export class WriterApp {
   }
 
   deleteChapter(id) {
-    if (!confirm('Supprimer ce chapitre ?')) return;
     this.state.chapters = this.state.chapters.filter(c => c.id !== id);
     this.save();
     this.renderList();

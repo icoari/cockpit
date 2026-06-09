@@ -337,9 +337,6 @@ export class CalendarWidget {
   }
 
   async handleDelete(eventId) {
-    const ev = this.events.find(e => e.id === eventId);
-    const title = ev?.summary || 'cet événement';
-    if (!confirm(`Supprimer « ${title} » ?`)) return;
     try {
       await deleteEvent(eventId);
       this.events = this.events.filter(e => e.id !== eventId);

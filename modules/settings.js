@@ -326,11 +326,9 @@ export class SettingsPanel {
         return;
       }
       if (action === 'reset') {
-        if (confirm('Réinitialiser TOUT ?')) {
-          resetAll();
-          this.render();
-          this.onChange();
-        }
+        resetAll();
+        this.render();
+        this.onChange();
         return;
       }
       if (action === 'push-enable') {
@@ -348,7 +346,6 @@ export class SettingsPanel {
         return;
       }
       if (action === 'push-disable') {
-        if (!confirm('Désactiver les notifications sur cet appareil ?')) return;
         const statusEl = this.root.querySelector('#pushStatus');
         await unsubscribePush();
         statusEl.textContent = 'Notifications désactivées.';
@@ -429,7 +426,6 @@ export class SettingsPanel {
         reader.onload = () => {
           try {
             importData(reader.result);
-            alert('Import réussi. La page va se recharger.');
             location.reload();
           } catch (err) {
             alert('Échec de l\'import : ' + (err.message || err));
@@ -511,7 +507,6 @@ export class SettingsPanel {
       await setupSync(pp);
       // First push: send the current local state to the cloud immediately.
       schedulePush(buildSyncPayload);
-      alert('Sync activée. Tes données seront chiffrées et envoyées dans quelques secondes.');
       this.render();
       this.onChange();
     } catch (err) {
@@ -525,12 +520,9 @@ export class SettingsPanel {
     try {
       const result = await unlockSync(pp);
       if (result && result.state) {
-        const ok = confirm('Sauvegarde trouvée. Restaurer ? La page se rechargera.');
-        if (!ok) return;
         importData(JSON.stringify(result.state));
         location.reload();
       } else {
-        alert('Sync activée. Aucune sauvegarde existante côté cloud pour le moment.');
         this.render();
         this.onChange();
       }
@@ -552,9 +544,7 @@ export class SettingsPanel {
   async runPull() {
     try {
       const result = await pullNow();
-      if (!result || !result.state) { alert('Aucune sauvegarde côté cloud.'); return; }
-      const ok = confirm('Remplacer les données locales par la sauvegarde cloud ? La page se rechargera.');
-      if (!ok) return;
+      if (!result || !result.state) return;
       importData(JSON.stringify(result.state));
       location.reload();
     } catch (err) {
@@ -563,17 +553,14 @@ export class SettingsPanel {
   }
 
   async runDisableLocal() {
-    if (!confirm('Oublier les clés sur cet appareil ? Le cloud reste intact, tu pourras restaurer plus tard avec la passphrase.')) return;
     disableSyncLocally();
     this.render();
     this.onChange();
   }
 
   async runWipe() {
-    if (!confirm('EFFACER TOUTES les données sur le cloud ? Action irréversible.')) return;
     try {
       await wipeRemote();
-      alert('Sauvegarde cloud effacée.');
       this.render();
       this.onChange();
     } catch (err) {

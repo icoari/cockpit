@@ -3,7 +3,7 @@
 // worth scanning if there's time. That's it.
 
 import { ICONS } from './icons.js';
-import { escapeHTML, timeAgo, haptic } from './util.js';
+import { escapeHTML, timeAgo, haptic, safeUrl, safeCssUrl } from './util.js';
 import { fetchFeed, pushSources } from './feed.js';
 import { isConfigured as llmConfigured } from './llm.js';
 import { generateDigest } from './digest.js';
@@ -42,13 +42,16 @@ function renderHeadline(item) {
     timeAgo(new Date(item.date)),
   ].filter(Boolean);
 
-  const thumb = isVideo && item.thumbnail
-    ? `<div class="pro2-headline__thumb" style="background-image:url('${escapeHTML(item.thumbnail)}')" aria-hidden="true"></div>`
+  const thumbUrl = isVideo ? safeCssUrl(item.thumbnail) : '';
+  const thumb = thumbUrl
+    ? `<div class="pro2-headline__thumb" style="background-image:url('${thumbUrl}')" aria-hidden="true"></div>`
     : '';
 
+  const href = safeUrl(item.url);
+  if (!href) return '';
   return `
     <a class="pro2-headline ${read ? 'pro2-headline--read' : ''} pro2-headline--${item.kind}"
-       href="${escapeHTML(item.url)}" target="_blank" rel="noopener noreferrer"
+       href="${escapeHTML(href)}" target="_blank" rel="noopener noreferrer"
        data-url="${escapeHTML(item.url)}">
       <div class="pro2-headline__eyebrow">
         ${eyebrowParts.map(p => `<span>${escapeHTML(p)}</span>`).join('<span class="pro2-headline__sep">·</span>')}
@@ -61,10 +64,12 @@ function renderHeadline(item) {
 }
 
 function renderLaterItem(item) {
+  const href = safeUrl(item.url);
+  if (!href) return '';
   const read = isAiRead(item.url);
   return `
     <a class="pro2-later__item ${read ? 'pro2-later__item--read' : ''}"
-       href="${escapeHTML(item.url)}" target="_blank" rel="noopener noreferrer"
+       href="${escapeHTML(href)}" target="_blank" rel="noopener noreferrer"
        data-url="${escapeHTML(item.url)}">
       <span class="pro2-later__title">${escapeHTML(item.title)}</span>
       <span class="pro2-later__meta">${escapeHTML(item.source || '')} · ${escapeHTML(timeAgo(new Date(item.date)))}</span>
@@ -169,9 +174,11 @@ export class ProWidget {
       const t = window.__bobWidgets?.trainsAller;
       if (t?.items?.length) {
         const first = t.items[0];
-        if (first?.depTime) {
-          const dep = new Date(first.depTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-          out.trainsNext = `${first.line || 'Prochain'} ${dep}`;
+        if (first?.expected) {
+          const dep = first.expected.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+          const line = (first.lineRef || '').includes('C01742') ? 'RER A'
+                     : (first.lineRef || '').includes('C01739') ? 'J' : 'Prochain';
+          out.trainsNext = `${line} ${dep}`;
         }
       }
     } catch {}

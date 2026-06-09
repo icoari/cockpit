@@ -28,6 +28,7 @@ export async function sendWebPush({ subscription, payload, vapid, ttl = 86400, u
       'Urgency': urgency,
     },
     body,
+    signal: AbortSignal.timeout(10_000),
   });
   return resp;
 }
@@ -89,9 +90,10 @@ async function encryptAes128Gcm(plaintext, uaPubRaw, authSecret) {
   const nonce    = await hkdfExpand(prk, concat(strToBytes('Content-Encoding: nonce'), new Uint8Array([0])), 12);
   const cek = await crypto.subtle.importKey('raw', cekBytes, 'AES-GCM', false, ['encrypt']);
 
-  // Pad with the single-record terminator (0x02) at the end.
+  // Pad with the single-record terminator (0x02) at the end. Keep the FULL
+  // body (header 86 B + ciphertext + tag) under the 4096 B push-service cap.
   const recordSize = 4096;
-  const maxPlain = recordSize - 16 - 1;
+  const maxPlain = recordSize - 86 - 16 - 1;
   if (plaintext.length > maxPlain) throw new Error('Payload trop volumineux');
   const padded = new Uint8Array(plaintext.length + 1);
   padded.set(plaintext, 0);

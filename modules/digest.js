@@ -69,16 +69,27 @@ export async function generateDigest(items) {
     throw new Error('Réponse invalide du modèle. Réessaie.');
   }
 
-  // Resolve indexes back to actual items.
+  // Resolve indexes back to actual items — dedupe (a model can repeat an
+  // index) and hard-cap at 5 headlines.
+  const seenUrls = new Set();
   const headlines = parsed.headlines
     .map(h => ({ item: pool[h.i], why: (h.why || '').trim() }))
-    .filter(h => h.item && h.why);
+    .filter(h => h.item && h.why)
+    .filter(h => {
+      if (seenUrls.has(h.item.url)) return false;
+      seenUrls.add(h.item.url);
+      return true;
+    })
+    .slice(0, 5);
 
-  const headlineUrls = new Set(headlines.map(h => h.item.url));
   const later = (parsed.later || [])
     .map(l => pool[l.i])
     .filter(Boolean)
-    .filter(it => !headlineUrls.has(it.url))
+    .filter(it => {
+      if (seenUrls.has(it.url)) return false;
+      seenUrls.add(it.url);
+      return true;
+    })
     .slice(0, 12);
 
   return {

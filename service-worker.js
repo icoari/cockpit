@@ -1,4 +1,4 @@
-const CACHE = 'bob-v48';
+const CACHE = 'bob-v49';
 const ASSETS = [
   './',
   './index.html',
@@ -15,19 +15,15 @@ const ASSETS = [
   './modules/gas.js',
   './modules/trains.js',
   './modules/lastTrain.js',
-  './modules/aiwatch.js',
   './modules/calendar.js',
   './modules/bins.js',
   './modules/pharmacies.js',
-  './modules/youtube.js',
-  './modules/hackernews.js',
   './modules/writer.js',
   './modules/settings.js',
   './modules/crypto.js',
   './modules/sync.js',
   './modules/llm.js',
   './modules/feed.js',
-  './modules/briefing.js',
   './modules/insights.js',
   './modules/copilot.js',
   './modules/pro.js',
@@ -110,10 +106,12 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || '/';
+  // The app lives under a sub-path (GitHub Pages) — resolve against the SW
+  // scope, never the origin root.
+  const raw = (event.notification.data && event.notification.data.url) || './';
+  const url = new URL(raw.replace(/^\//, './'), self.registration.scope).href;
   event.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    // Focus an existing window if any
     for (const c of all) {
       if ('focus' in c) {
         try {

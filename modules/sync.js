@@ -96,6 +96,7 @@ export async function unlockSync(passphrase) {
 
 let pushTimer = null;
 let pushPending = null;
+let pushInFlight = null;   // promise of the currently-running push, if any
 
 // Schedule an encrypted push. buildPayload() is called inside the debounced
 // callback so the payload reflects the LATEST state, not the value at the
@@ -107,39 +108,55 @@ export function schedulePush(buildPayload) {
   pushTimer = setTimeout(runPush, PUSH_DEBOUNCE_MS);
 }
 
+// True when an edit is waiting in the debounce window or being sent.
+export function hasPendingPush() {
+  return !!(pushPending || pushInFlight);
+}
+
 async function runPush() {
+  // Serialize pushes — two interleaved POSTs can persist lastPushedAt out
+  // of order and make pullIfNewer re-pull our own blob.
+  if (pushInFlight) {
+    await pushInFlight;
+    if (!pushPending) return;
+  }
   if (!pushPending) return;
   const buildPayload = pushPending;
   pushPending = null;
 
-  try {
-    const plaintext = buildPayload();
-    if (plaintext == null) return;
-    const hash = await sha256Hex(plaintext);
-    const local = readLocal();
-    if (!local) return;
-    if (local.lastPushedHash === hash) return;   // identical to last push, skip
+  pushInFlight = (async () => {
+    try {
+      const plaintext = buildPayload();
+      if (plaintext == null) return;
+      const hash = await sha256Hex(plaintext);
+      const local = readLocal();
+      if (!local) return;
+      if (local.lastPushedHash === hash) return;   // identical to last push, skip
 
-    const dataKey = await importDataKey(local.dataKeyHex);
-    const { iv, ciphertext } = await encrypt(plaintext, dataKey);
+      const dataKey = await importDataKey(local.dataKeyHex);
+      const { iv, ciphertext } = await encrypt(plaintext, dataKey);
 
-    const resp = await fetch(`${WORKER_URL}/sync/data`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${local.authToken}`,
-      },
-      body: JSON.stringify({ iv, ciphertext, version: 1 }),
-    });
-    if (!resp.ok) {
-      console.warn('[sync] push failed', resp.status);
-      return;
+      const resp = await fetch(`${WORKER_URL}/sync/data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${local.authToken}`,
+        },
+        body: JSON.stringify({ iv, ciphertext, version: 1 }),
+      });
+      if (!resp.ok) {
+        console.warn('[sync] push failed', resp.status);
+        return;
+      }
+      const data = await resp.json();
+      writeLocal({ ...readLocal(), lastPushedHash: hash, lastPushedAt: data.updatedAt });
+    } catch (e) {
+      console.warn('[sync] push error', e);
+    } finally {
+      pushInFlight = null;
     }
-    const data = await resp.json();
-    writeLocal({ ...local, lastPushedHash: hash, lastPushedAt: data.updatedAt });
-  } catch (e) {
-    console.warn('[sync] push error', e);
-  }
+  })();
+  await pushInFlight;
 }
 
 // Force-push the current snapshot immediately, bypassing the 5 s debounce.

@@ -122,20 +122,27 @@ export async function stream(messages, onChunk, opts = {}) {
   let buf = '';
   let full = '';
 
+  const handleEvent = (eventText) => {
+    const parsed = parseEvent(eventText, format);
+    if (parsed.error) throw new Error(parsed.error);
+    if (parsed.delta) {
+      full += parsed.delta;
+      onChunk(parsed.delta, full);
+    }
+  };
+
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
     buf += dec.decode(value, { stream: true });
     const events = splitSSE(buf);
     buf = events.remainder;
-    for (const ev of events.list) {
-      const delta = parseDelta(ev, format);
-      if (delta) {
-        full += delta;
-        onChunk(delta, full);
-      }
-    }
+    for (const ev of events.list) handleEvent(ev);
   }
+  // Flush the decoder and process whatever's left — the final event isn't
+  // always followed by a blank line.
+  buf += dec.decode();
+  if (buf.trim()) handleEvent(buf);
   return full;
 }
 
@@ -146,29 +153,30 @@ function splitSSE(buf) {
   return { list: parts, remainder };
 }
 
-function parseDelta(eventText, format) {
-  // Each event has one or more "data:" lines.
+function parseEvent(eventText, format) {
+  // Multi-line "data:" fields join with a newline per the SSE spec.
   const lines = eventText.split(/\r?\n/);
-  let dataLine = '';
+  const dataLines = [];
   for (const line of lines) {
-    if (line.startsWith('data:')) dataLine += line.slice(5).trim();
+    if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''));
   }
-  if (!dataLine) return '';
-  if (dataLine === '[DONE]') return '';
+  const dataStr = dataLines.join('\n').trim();
+  if (!dataStr || dataStr === '[DONE]') return {};
 
   try {
-    const obj = JSON.parse(dataLine);
+    const obj = JSON.parse(dataStr);
     if (format === 'anthropic') {
-      // Anthropic SSE: event types include content_block_delta with
-      // delta = { type: 'text_delta', text: '...' }
-      if (obj.type === 'content_block_delta' && obj.delta?.type === 'text_delta') {
-        return obj.delta.text || '';
+      if (obj.type === 'error') {
+        return { error: obj.error?.message || 'Erreur du modèle (stream)' };
       }
-      return '';
+      if (obj.type === 'content_block_delta' && obj.delta?.type === 'text_delta') {
+        return { delta: obj.delta.text || '' };
+      }
+      return {};
     }
-    // OpenAI SSE: choices[0].delta.content
-    return obj.choices?.[0]?.delta?.content || '';
-  } catch { return ''; }
+    if (obj.error) return { error: obj.error.message || 'Erreur du modèle (stream)' };
+    return { delta: obj.choices?.[0]?.delta?.content || '' };
+  } catch { return {}; }
 }
 
 // ---------- Tiny ping ----------

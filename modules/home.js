@@ -3,7 +3,7 @@
 // LLM open with a 2-3 sentence contextual opener.
 
 import { ICONS } from './icons.js';
-import { escapeHTML, fetchWithTimeout, timeAgo, haptic } from './util.js';
+import { escapeHTML, fetchWithTimeout, timeAgo, haptic, safeUrl } from './util.js';
 import { getSettings } from './state.js';
 import { isConfigured as llmConfigured, complete } from './llm.js';
 
@@ -77,11 +77,13 @@ function getTrainsAller() {
   const first = w.items[0];
   if (!first?.expected) return null;
   const minUntil = Math.round((first.expected - Date.now()) / 60000);
+  const line = (first.lineRef || '').includes('C01742') ? 'RER A'
+             : (first.lineRef || '').includes('C01739') ? 'J' : '';
   return {
-    line: first.lineCode || 'J',
+    line,
     destination: first.destination,
     minUntil,
-    time: new Date(first.expected).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+    time: first.expected.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
     cancelled: !!first.cancelled,
   };
 }
@@ -299,13 +301,17 @@ export class HomeWidget {
       el.innerHTML = `<p class="home-empty">Ouvre <strong>Pro</strong> pour générer l'éditorial du jour.</p>`;
       return;
     }
-    el.innerHTML = heads.map(h => `
-      <a class="home-prio" href="${escapeHTML(h.url)}" target="_blank" rel="noopener noreferrer">
+    el.innerHTML = heads.map(h => {
+      const href = safeUrl(h.url);
+      if (!href) return '';
+      return `
+      <a class="home-prio" href="${escapeHTML(href)}" target="_blank" rel="noopener noreferrer">
         <span class="home-prio__source">${escapeHTML(h.source || '')} · ${escapeHTML(timeAgo(new Date(h.date)))}</span>
         <span class="home-prio__title">${escapeHTML(h.title || '')}</span>
         ${h.why ? `<span class="home-prio__why">${escapeHTML(h.why)}</span>` : ''}
       </a>
-    `).join('');
+    `;
+    }).join('');
   }
 
   renderProjects() {

@@ -115,7 +115,7 @@ export class SettingsPanel {
                 <span class="crud-item__name">${escapeHTML(new Date(d).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}</span>
                 <span class="crud-item__sub">${escapeHTML(d)}</span>
               </div>
-              <button class="crud-item__action" data-remove-bin="${d}" type="button">supprimer</button>
+              <button class="crud-item__action" data-remove-bin="${escapeHTML(d)}" type="button">supprimer</button>
             </div>
           `).join('') || '<div class="card__empty" style="padding:6px 0">Aucune date ajoutée.</div>'}
         </div>
@@ -246,8 +246,15 @@ export class SettingsPanel {
   }
 
   attach() {
-    this.root.querySelectorAll('[data-field]').forEach(el => {
-      el.addEventListener('change', () => {
+    // All listeners are delegated on this.root, which survives re-renders —
+    // attach exactly once or every re-render stacks another full set
+    // (N passphrase prompts, N imports, N pushMonitoring calls…).
+    if (this.listenersAttached) { this.refreshPushStatus(); return; }
+    this.listenersAttached = true;
+
+    this.root.addEventListener('change', (e) => {
+      const el = e.target.closest('[data-field]');
+      if (!el) return;
         const settings = getSettings();
         const v = el.type === 'checkbox' ? el.checked : el.value;
         if (!settings.llm) settings.llm = { enabled: false, endpoint: '', apiKey: '', model: '', authStyle: 'bearer' };
@@ -273,7 +280,6 @@ export class SettingsPanel {
         }
         save();
         this.onChange();
-      });
     });
 
     this.root.addEventListener('click', async (e) => {

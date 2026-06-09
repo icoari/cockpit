@@ -76,15 +76,18 @@ function calendarUrl(path = '') {
   return `https://www.googleapis.com/calendar/v3/calendars/${calId}/events${path}`;
 }
 
-async function fetchEventsRange(timeMinIso, timeMaxIso) {
+async function fetchEventsRange(timeMinIso, timeMaxIso, retried = false) {
   let token = await ensureToken();
   const url = `${calendarUrl()}?timeMin=${encodeURIComponent(timeMinIso)}&timeMax=${encodeURIComponent(timeMaxIso)}&singleEvents=true&orderBy=startTime&maxResults=250`;
   const resp = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${token}` } }, 9000);
   if (resp.status === 401) {
+    // One silent retry only — a token Google grants but the API still
+    // rejects (revoked access, scope mismatch) would otherwise loop forever.
+    if (retried) throw Object.assign(new Error('SIGN_IN_NEEDED'), { silent: true });
     clearToken();
     try { token = await requestToken({ silent: true }); }
     catch { throw Object.assign(new Error('SIGN_IN_NEEDED'), { silent: true }); }
-    return fetchEventsRange(timeMinIso, timeMaxIso);
+    return fetchEventsRange(timeMinIso, timeMaxIso, true);
   }
   if (!resp.ok) throw new Error(`Agenda : HTTP ${resp.status}`);
   return resp.json();

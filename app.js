@@ -1,7 +1,8 @@
 import { ICONS } from './modules/icons.js';
 import { formatDateLong, haptic } from './modules/util.js';
 import { getSettings, updateSettings, importData, buildSyncPayload } from './modules/state.js';
-import { startupReconcile, pullIfNewer } from './modules/sync.js';
+import { startupReconcile } from './modules/sync.js';
+import { escapeHTML } from './modules/util.js';
 import { HomeWidget } from './modules/home.js';
 import { TrainsWidget } from './modules/trains.js';
 import { LastTrainWidget } from './modules/lastTrain.js';
@@ -205,41 +206,16 @@ function initSwipeNavigation() {
     setActiveTab(VISIBLE_TABS[newIdx]);
   }, { passive: true });
 
-  // Absorb the synthesized click that fires on whatever was under the finger
-  // when a swipe completed — otherwise tapping over a card to swipe would
-  // also activate that card.
+  // Absorb the SINGLE synthesized click that fires on whatever was under
+  // the finger when a swipe completed. One-shot: a deliberate fast tap
+  // right after a swipe must keep working.
   document.addEventListener('click', (e) => {
-    if (Date.now() - swipeJustFired < 350) {
+    if (swipeJustFired && Date.now() - swipeJustFired < 350) {
+      swipeJustFired = 0;
       e.preventDefault();
       e.stopPropagation();
     }
   }, true);
-}
-
-// ---------- (legacy sub-tabs — replaced by ProWidget; left as a no-op stub) ----------
-function initSubtabs() {
-  const buttons = document.querySelectorAll('[data-subtabs] .subtab');
-  if (!buttons.length) return;
-
-  function setActive(name) {
-    buttons.forEach(b => b.classList.toggle('subtab--active', b.dataset.subtab === name));
-    document.querySelectorAll('[data-subtab-pane]').forEach(p => {
-      p.hidden = p.dataset.subtabPane !== name;
-    });
-    updateSettings({ proSubtab: name });
-  }
-
-  buttons.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      haptic(4);
-      setActive(btn.dataset.subtab);
-    });
-  });
-
-  const saved = getSettings().proSubtab || 'videos';
-  setActive(saved);
 }
 
 // ---------- Settings ----------
@@ -530,7 +506,7 @@ async function openHealthInsights(scope) {
       },
     });
   } catch (e) {
-    body.innerHTML = `<p class="insights-panel__placeholder" style="color:var(--danger)">Échec : ${e.message || e}</p>`;
+    body.innerHTML = `<p class="insights-panel__placeholder" style="color:var(--danger)">Échec : ${escapeHTML(e.message || String(e))}</p>`;
   }
 }
 
@@ -539,7 +515,6 @@ applyTheme();
 renderHeader();
 mountWidgets();
 initTabs();
-initSubtabs();
 initSettings();
 initProjects();
 initSwipeNavigation();
@@ -554,34 +529,34 @@ document.addEventListener('bob-open-project', (e) => {
 // (IDFM key, alert toggles, stop coords). Fire-and-forget on startup.
 pushMonitoring();
 
-// Auto-reconcile with the cloud — push any pending local edits, then pull
-// if the remote blob is strictly newer than what we last sent. Re-checks
-// every time the tab regains focus (throttled to once per minute).
-let lastPullAt = 0;
-async function reconcileNow() {
-  if (Date.now() - lastPullAt < 60_000) return;
-  lastPullAt = Date.now();
-  try {
-    const result = await pullIfNewer();
-    if (result?.state) {
-      importData(JSON.stringify(result.state));
-      location.reload();
+// Auto-reconcile with the cloud — always push pending local edits FIRST,
+// then pull only if remote is strictly newer. A shared in-flight gate +
+// 60 s throttle prevents the startup pass and a focus event from racing
+// each other into double pulls / double reloads.
+let lastReconcileAt = 0;
+let reconcileInFlight = null;
+function reconcile({ throttle = true } = {}) {
+  if (reconcileInFlight) return reconcileInFlight;
+  if (throttle && Date.now() - lastReconcileAt < 60_000) return Promise.resolve();
+  lastReconcileAt = Date.now();
+  reconcileInFlight = (async () => {
+    try {
+      const result = await startupReconcile(buildSyncPayload);
+      if (result?.state) {
+        importData(JSON.stringify(result.state));
+        location.reload();
+      }
+    } catch {} finally {
+      reconcileInFlight = null;
     }
-  } catch {}
+  })();
+  return reconcileInFlight;
 }
-(async () => {
-  try {
-    const result = await startupReconcile(buildSyncPayload);
-    if (result?.state) {
-      importData(JSON.stringify(result.state));
-      location.reload();
-    }
-  } catch {}
-})();
+reconcile({ throttle: false });
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) reconcileNow();
+  if (!document.hidden) reconcile();
 });
-window.addEventListener('focus', reconcileNow);
+window.addEventListener('focus', () => reconcile());
 
 // ---------- Service worker registration (moved from inline script for CSP) ----------
 if ('serviceWorker' in navigator) {

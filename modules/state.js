@@ -170,6 +170,8 @@ function migrate(merged) {
 
 function mergeDeep(target, source) {
   for (const k in source) {
+    // Guard against prototype pollution from imported JSON / sync blobs.
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
     if (source[k] && typeof source[k] === 'object' && !Array.isArray(source[k])) {
       target[k] = mergeDeep(target[k] || {}, source[k]);
     } else {
@@ -188,12 +190,19 @@ export function save() {
   schedulePush(buildSyncPayload);
 }
 
-// Snapshot for cloud sync. Identical shape to exportData() — strips OAuth
-// token, drops volatile cache, and pulls in writer + health-tracker blobs.
+// Snapshot for cloud sync — strips the OAuth token, the volatile cache AND
+// per-device UI state (active tab, searches) so that navigating around on
+// one device doesn't count as a data change and trigger pushes/pulls on
+// the others.
 export function buildSyncPayload() {
   const snapshot = structuredClone(state);
   if (snapshot.settings?.calendar) snapshot.settings.calendar.token = null;
   delete snapshot.cache;
+  delete snapshot.feedSearch;
+  if (snapshot.settings) {
+    delete snapshot.settings.activeTab;
+    delete snapshot.settings.proSubtab;
+  }
   return JSON.stringify({
     ...snapshot,
     _writer: readLocalJSON(WRITER_KEY),
@@ -328,11 +337,28 @@ export function importData(json) {
         && rest.settings.youtube.channels.length === 0) {
       delete rest.settings.youtube.channels;
     }
+    // Credentials stripped at export time (empty/nulled) must not clobber
+    // the values already configured on this device.
+    if (rest.settings.llm && !rest.settings.llm.apiKey) delete rest.settings.llm.apiKey;
+    if (rest.settings.idfm && !rest.settings.idfm.apiKey) delete rest.settings.idfm.apiKey;
+    if (rest.settings.calendar && rest.settings.calendar.token == null) delete rest.settings.calendar.token;
   }
+
+  // Carry over the device's existing credentials — the merge base is
+  // DEFAULT_STATE (empty strings), not the live state, so stripped fields
+  // would otherwise reset to ''.
+  const keepLlmKey  = state.settings?.llm?.apiKey || '';
+  const keepIdfmKey = state.settings?.idfm?.apiKey || '';
+  const keepCalTok  = state.settings?.calendar?.token || null;
 
   state = mergeDeep(structuredClone(DEFAULT_STATE), rest);
   state = migrate(state);     // auto-heal anything still missing
   state.cache = {};            // force every widget to refetch fresh data
+
+  if (!state.settings.llm.apiKey && keepLlmKey)   state.settings.llm.apiKey = keepLlmKey;
+  if (!state.settings.idfm.apiKey && keepIdfmKey) state.settings.idfm.apiKey = keepIdfmKey;
+  if (!state.settings.calendar.token && keepCalTok) state.settings.calendar.token = keepCalTok;
+
   save();
   if (writer && typeof writer === 'object') {
     try { localStorage.setItem(WRITER_KEY, JSON.stringify(writer)); } catch {}

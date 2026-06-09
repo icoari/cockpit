@@ -202,6 +202,13 @@ export class WriterApp {
   }
 
   async runCopilotTask(task, contentEl, statusEl, btn, adjust, onChange) {
+    // One stream at a time — a second task started mid-stream would write
+    // from a stale snapshot and corrupt the chapter.
+    if (this.copilotBusy) {
+      statusEl.textContent = 'Une génération est déjà en cours.';
+      return;
+    }
+
     const selStart = contentEl.selectionStart;
     const selEnd = contentEl.selectionEnd;
     const full = contentEl.value;
@@ -213,9 +220,13 @@ export class WriterApp {
       return;
     }
 
+    this.copilotBusy = true;
     btn.disabled = true;
     btn.classList.add('writer-copilot__btn--busy');
     statusEl.textContent = 'En cours…';
+    // Typing during the stream would be silently overwritten by the next
+    // chunk — lock the textarea for the duration instead.
+    contentEl.readOnly = true;
 
     // Where the streamed output lands:
     //  - expand: replaces the selection inline
@@ -252,6 +263,8 @@ export class WriterApp {
     } catch (e) {
       statusEl.textContent = 'Échec : ' + (e.message || e);
     } finally {
+      this.copilotBusy = false;
+      contentEl.readOnly = false;
       btn.disabled = false;
       btn.classList.remove('writer-copilot__btn--busy');
       setTimeout(() => { statusEl.textContent = ''; }, 4000);

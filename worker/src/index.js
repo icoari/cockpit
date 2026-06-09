@@ -1,10 +1,11 @@
 // Bob backend Worker — endpoints + scheduled tasks
 //
-// Cron schedule:
+// Cron schedule (UTC):
 //   */10 * * * *     feed aggregation
 //   */5 6-23 * * *   IDFM disruption watch
-//   0 6 * * *        morning brief push (7h Paris summer)
-//   0 21 * * *       health-tracker evening reminder
+//   0 5 * * *        morning brief push (7h Paris summer)
+//   0 16 * * *       last-train-of-tonight check (18h Paris summer)
+//   0 21 * * *       health-tracker evening reminder (23h Paris summer)
 
 import { sendWebPush } from './webpush.js';
 
@@ -35,7 +36,7 @@ const BASELINE_RSS = [
 ];
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') {
@@ -45,14 +46,14 @@ export default {
     try {
       const p = url.pathname;
       if (p === '/' || p === '/health') return json({ ok: true, service: 'bob' });
-      if (p === '/proxy')               return await handleProxy(url);
+      if (p === '/proxy')               return await handleProxy(url, request, env);
 
       if (p === '/sync/salt')           return await handleGetSalt(env);
       if (p === '/sync/setup')          return assertMethod(request, 'POST', () => handleSetup(request, env));
       if (p === '/sync/data')           return await handleSyncData(request, env);
       if (p === '/sync/wipe')           return assertMethod(request, 'DELETE', () => handleWipe(request, env));
 
-      if (p === '/feed')                return await handleGetFeed(request, env);
+      if (p === '/feed')                return await handleGetFeed(request, env, ctx);
       if (p === '/feed/sources')        return await handleSources(request, env);
       if (p === '/feed/refresh')        return assertMethod(request, 'POST', () => handleFeedRefresh(request, env));
 
@@ -98,7 +99,7 @@ function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-LLM-Endpoint, X-LLM-Key, X-LLM-Auth-Style, X-LLM-Format',
     'Access-Control-Max-Age': '86400',
   };
 }
@@ -143,14 +144,22 @@ function isProxyTargetAllowed(target) {
   try { u = new URL(target); } catch { return false; }
   if (!['http:', 'https:'].includes(u.protocol)) return false;
   const h = u.hostname.toLowerCase();
-  if (h === 'localhost' || h.endsWith('.local')
-      || h.startsWith('127.') || h.startsWith('10.')
+  if (h === 'localhost' || h.endsWith('.local') || h.endsWith('.internal')) return false;
+  // Raw IPv6 (URL hostname keeps the brackets) and any IPv4-shaped host in
+  // private/reserved space. Plain-number hosts (decimal/hex IPs) blocked too.
+  if (h.startsWith('[')) return false;
+  if (/^\d+$/.test(h) || /^0x[0-9a-f]+$/.test(h)) return false;
+  if (h === '0.0.0.0' || h.startsWith('127.') || h.startsWith('10.')
       || h.startsWith('169.254.') || h.startsWith('192.168.')
-      || /^172\.(1[6-9]|2\d|3[0-1])\./.test(h)) return false;
+      || /^172\.(1[6-9]|2\d|3[0-1])\./.test(h)
+      || /^100\.(6[4-9]|[7-9]\d|1[0-2][0-7])\./.test(h)) return false;
   return true;
 }
 
-async function handleProxy(url) {
+async function handleProxy(url, request, env) {
+  // Auth required — without it this is an open proxy anyone can burn
+  // quota and IP reputation through.
+  if (!await verifyAuth(request, env)) return json({ error: 'unauthorized' }, 401);
   const target = url.searchParams.get('url');
   if (!target) return json({ error: 'missing url' }, 400);
   if (!isProxyTargetAllowed(target)) return json({ error: 'target not allowed' }, 400);
@@ -160,6 +169,7 @@ async function handleProxy(url) {
     upstream = await fetch(target, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; bob-proxy/1.0)' },
       cf: { cacheTtl: 600, cacheEverything: true },
+      signal: AbortSignal.timeout(10_000),
     });
   } catch (e) {
     return json({ error: 'upstream fetch failed: ' + e.message }, 502);
@@ -252,12 +262,13 @@ async function handleWipe(request, env) {
 // /feed (aggregation)
 // ====================================================================
 
-async function handleGetFeed(request, env) {
+async function handleGetFeed(request, env, ctx) {
   if (!await verifyAuth(request, env)) return json({ error: 'unauthorized' }, 401);
   const raw = await env.KV.get(KEY_FEED);
   if (!raw) {
     // Cold start — kick off an aggregation in the background so the next
-    // visit hits a populated cache. Return what we can from the network now.
+    // visit hits a populated cache.
+    if (ctx) ctx.waitUntil(aggregateFeed(env).catch(() => {}));
     return json({ items: [], updatedAt: 0, stale: true });
   }
   return new Response(raw, {
@@ -300,8 +311,17 @@ async function handleSources(request, env) {
 
 async function handlePushSubscribe(request, env) {
   if (!await verifyAuth(request, env)) return json({ error: 'unauthorized' }, 401);
-  const sub = await request.json();
-  await env.KV.put(KEY_PUSH, JSON.stringify(sub));
+  let sub;
+  try { sub = await request.json(); } catch { return json({ error: 'invalid json' }, 400); }
+  if (!sub?.endpoint || typeof sub.endpoint !== 'string' || !sub.endpoint.startsWith('https://')
+      || !sub.keys?.p256dh || !sub.keys?.auth) {
+    return json({ error: 'invalid subscription shape' }, 400);
+  }
+  await env.KV.put(KEY_PUSH, JSON.stringify({
+    endpoint: sub.endpoint,
+    expirationTime: sub.expirationTime ?? null,
+    keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth },
+  }));
   return json({ ok: true });
 }
 
@@ -482,6 +502,7 @@ async function checkDisruptions(env) {
   const alerted = new Set(alertedRaw ? JSON.parse(alertedRaw) : []);
   const stillActive = new Set();
   const newAlerts = [];
+  let anyLineFailed = false;
 
   for (const lineId of mon.idfmLines) {
     try {
@@ -489,23 +510,23 @@ async function checkDisruptions(env) {
       const r = await fetch(url, {
         headers: { 'apikey': mon.idfmKey },
         cf: { cacheTtl: 0 },
+        signal: AbortSignal.timeout(10_000),
       });
-      if (!r.ok) continue;
+      if (!r.ok) { anyLineFailed = true; continue; }
       const data = await r.json();
       const list = data.disruptions || [];
       const now = Date.now();
       for (const d of list) {
         if (!isImpactful(d)) continue;
-        // Skip disruptions that ended already.
         const ends = (d.application_periods || []).map(p => parseNavitiaDate(p.end)).filter(Boolean);
         if (ends.length && ends.every(t => t < now)) continue;
         stillActive.add(d.id);
         if (alerted.has(d.id)) continue;
-        const title = (d.messages?.[0]?.text || d.disruption_id || 'Perturbation').toString().slice(0, 60);
         const summary = compactDisruptionText(d);
-        newAlerts.push({ id: d.id, line: lineMnemonic(lineId), title, summary });
+        newAlerts.push({ id: d.id, line: lineMnemonic(lineId), summary });
       }
     } catch (e) {
+      anyLineFailed = true;
       console.error('disruption fetch failed for', lineId, e.message);
     }
   }
@@ -519,12 +540,20 @@ async function checkDisruptions(env) {
       url: '/?goto=trains',
     }, { urgency: 'high', ttl: 6 * 3600 });
     alerted.add(a.id);
+    stillActive.add(a.id);
   }
 
-  // Keep only IDs of currently active disruptions so the set doesn't grow
-  // unbounded; expired disruption IDs would otherwise stay forever.
-  const persist = Array.from(stillActive);
-  await env.KV.put(KEY_ALERTED_DISRUPTIONS, JSON.stringify(persist));
+  // Persist the active set so each disruption alerts exactly once. When a
+  // line fetch failed, keep the previous IDs too — pruning them now would
+  // re-alert the same disruption when the API recovers. Skip the write
+  // entirely when nothing changed (this cron runs every 5 min; that's 200+
+  // pointless KV writes a day otherwise).
+  const persistSet = anyLineFailed ? new Set([...alerted, ...stillActive]) : stillActive;
+  const persist = Array.from(persistSet).sort();
+  const previous = Array.from(alerted).sort();
+  if (JSON.stringify(persist) !== JSON.stringify(previous)) {
+    await env.KV.put(KEY_ALERTED_DISRUPTIONS, JSON.stringify(persist));
+  }
 }
 
 function lineMnemonic(lineId) {
@@ -562,12 +591,38 @@ function compactDisruptionText(d) {
   return msg.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim() || 'Trafic perturbé sur la ligne.';
 }
 
+// ---- Paris time helpers -------------------------------------------------
+// Workers run in UTC; Navitia timestamps are Europe/Paris local. Convert
+// explicitly or every comparison drifts by 1-2 h.
+
+function parisOffsetMs(utcDate = new Date()) {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(utcDate).map(p => [p.type, p.value]));
+  const asUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour % 24, +parts.minute, +parts.second);
+  return asUtc - utcDate.getTime();
+}
+
+// Navitia "YYYYMMDDTHHmmss" (Paris local) → epoch ms
 function parseNavitiaDate(s) {
   if (!s) return null;
-  // Navitia format: YYYYMMDDTHHmmss
   const m = s.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/);
   if (!m) return null;
-  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+  const utcGuess = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+  return utcGuess - parisOffsetMs(new Date(utcGuess));
+}
+
+// epoch ms → { h, m } in Paris local time
+function parisHourMin(epochMs) {
+  const fmt = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(new Date(epochMs)).map(p => [p.type, p.value]));
+  return { h: +parts.hour % 24, m: +parts.minute };
 }
 
 // Daily 18 h Paris check — asks the journey planner for tonight's LAST
@@ -581,7 +636,8 @@ async function checkLastTrainsTonight(env) {
 
   const lineJ    = 'line:IDFM:C01739';
   const lineRerA = 'line:IDFM:C01742';
-  const dt = navitiaDt(new Date());
+  // Probe from 21h Paris so the 50-journey window reaches end of service.
+  const dt = navitiaDtParisToday(21, 0);
 
   const probes = [
     { label: 'Transilien J',  dest: 'Conflans FdO', line: lineJ,    from: mon.stops.paris,    to: mon.stops.home,    earlyThreshold: 23 * 60 + 30 },
@@ -596,18 +652,20 @@ async function checkLastTrainsTonight(env) {
   const findings = [];
   for (let i = 0; i < probes.length; i++) {
     const r = results[i];
-    if (!r || !r.depart) {
+    if (!r || !r.departMs) {
       // No journey returned at all — that itself is a flag.
       findings.push({ probe: probes[i], type: 'none', text: 'aucun départ trouvé ce soir' });
       continue;
     }
-    const m = r.depart.getHours() * 60 + r.depart.getMinutes();
-    if (m < probes[i].earlyThreshold) {
+    // Compare in Paris local time — the Worker clock is UTC.
+    const { h, m } = parisHourMin(r.departMs);
+    const minOfDay = h * 60 + m;
+    // Past-midnight departures (h < 4) are end-of-service, never "early".
+    if (h >= 4 && minOfDay < probes[i].earlyThreshold) {
       findings.push({
         probe: probes[i],
         type: 'early',
-        text: `dernier départ ${fmtHourMin(r.depart)}`,
-        depart: r.depart,
+        text: `dernier départ ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
       });
     }
   }
@@ -634,40 +692,35 @@ async function checkLastTrainsTonight(env) {
 }
 
 async function lastJourneyTonight(apiKey, probe, dt) {
+  // count=50 from 21h Paris covers end-of-service even on a frequent line —
+  // querying from "now" returns 50 journeys ending mid-evening and would
+  // mislabel the 50th as the "last".
   const url = `https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia/journeys`
             + `?from=${probe.from.lon};${probe.from.lat}`
             + `&to=${probe.to.lon};${probe.to.lat}`
             + `&datetime=${dt}`
             + `&allowed_id[]=${encodeURIComponent(probe.line)}`
             + `&count=50`;
-  const r = await fetch(url, { headers: { 'apikey': apiKey } });
+  const r = await fetch(url, { headers: { 'apikey': apiKey }, signal: AbortSignal.timeout(12_000) });
   if (!r.ok) return null;
   const data = await r.json();
   const journeys = data.journeys || [];
   if (journeys.length === 0) return null;
   const last = journeys[journeys.length - 1];
   return {
-    depart: parseNavitiaDateObj(last.departure_date_time),
-    arrive: parseNavitiaDateObj(last.arrival_date_time),
+    departMs: parseNavitiaDate(last.departure_date_time),
+    arriveMs: parseNavitiaDate(last.arrival_date_time),
   };
 }
 
-function parseNavitiaDateObj(s) {
-  if (!s) return null;
-  const m = s.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/);
-  if (!m) return null;
-  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
-}
-
-function fmtHourMin(d) {
-  const h = String(d.getHours()).padStart(2, '0');
-  const m = String(d.getMinutes()).padStart(2, '0');
-  return `${h}:${m}`;
-}
-
-function navitiaDt(d) {
+// "YYYYMMDDTHHmmss" for a given Paris local hour today
+function navitiaDtParisToday(hour, minute = 0) {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit',
+  });
+  const [y, mo, d] = fmt.format(new Date()).split('-');
   const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+  return `${y}${mo}${d}T${pad(hour)}${pad(minute)}00`;
 }
 
 // ====================================================================
@@ -721,6 +774,9 @@ async function handleLlm(request, env) {
       method: 'POST',
       headers: upstreamHeaders,
       body,
+      // Generous — long generations stream for a while, but a wedged
+      // upstream must not hold the Worker open forever.
+      signal: AbortSignal.timeout(120_000),
     });
   } catch (e) {
     return json({ error: 'upstream fetch failed: ' + e.message }, 502);
@@ -806,6 +862,7 @@ async function fetchYouTubeFeed(channel) {
   const resp = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 bob-agg/1.0' },
     cf: { cacheTtl: 300, cacheEverything: true },
+    signal: AbortSignal.timeout(10_000),
   });
   if (!resp.ok) return [];
   const xml = await resp.text();
@@ -848,6 +905,7 @@ async function fetchRssFeed(src) {
   const resp = await fetch(src.url, {
     headers: { 'User-Agent': 'Mozilla/5.0 bob-agg/1.0' },
     cf: { cacheTtl: 600, cacheEverything: true },
+    signal: AbortSignal.timeout(10_000),
   });
   if (!resp.ok) return [];
   const xml = await resp.text();
@@ -865,11 +923,9 @@ function parseRssOrAtom(xml, src) {
     const title = decodeXml(cleanXmlText(e.match(/<title[^>]*>([\s\S]*?)<\/title>/)?.[1] || ''));
     let link = '';
     if (isAtom) {
-      link = e.match(/<link[^>]*rel="alternate"[^>]*href="([^"]+)"/)?.[1]
-          || e.match(/<link[^>]*href="([^"]+)"[^>]*>/)?.[1]
-          || '';
+      link = pickAtomLink(e);
     } else {
-      link = (e.match(/<link[^>]*>([\s\S]*?)<\/link>/)?.[1] || '').trim();
+      link = cleanXmlText(e.match(/<link[^>]*>([\s\S]*?)<\/link>/)?.[1] || '').trim();
     }
     const published = e.match(/<published>([^<]+)<\/published>/)?.[1]
                   || e.match(/<updated>([^<]+)<\/updated>/)?.[1]
@@ -903,7 +959,7 @@ function parseRssOrAtom(xml, src) {
 async function fetchHnTop() {
   const sinceTs = Math.floor((Date.now() - 48 * 3600 * 1000) / 1000);
   const url = `https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=40&numericFilters=created_at_i>${sinceTs},points>100`;
-  const resp = await fetch(url);
+  const resp = await fetch(url, { signal: AbortSignal.timeout(8_000) });
   if (!resp.ok) return [];
   const data = await resp.json();
   return (data.hits || []).map(h => {
@@ -930,19 +986,38 @@ async function fetchHnTop() {
 // ---- XML utils --------------------------------------------------------
 
 function decodeXml(s) {
+  // &amp; decoded LAST or "&amp;lt;" double-decodes into a real "<".
   return s
-    .replace(/&amp;/g, '&')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(parseInt(n, 10)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)));
+    .replace(/&amp;/g, '&');
 }
 
 function cleanXmlText(s) {
   // strip CDATA wrappers
   return s.replace(/^\s*<!\[CDATA\[/, '').replace(/\]\]>\s*$/, '').trim();
+}
+
+// Atom entries can carry several <link> tags (self, enclosure, alternate)
+// with attributes in any order and either quote style. Prefer
+// rel="alternate", fall back to the first link that isn't self/enclosure.
+function pickAtomLink(entryXml) {
+  const tags = [...entryXml.matchAll(/<link\b[^>]*>/g)].map(m => m[0]);
+  let fallback = '';
+  for (const tag of tags) {
+    const href = tag.match(/href\s*=\s*["']([^"']+)["']/)?.[1] || '';
+    if (!href) continue;
+    const rel = tag.match(/rel\s*=\s*["']([^"']+)["']/)?.[1] || '';
+    if (rel === 'alternate' || rel === '') {
+      if (rel === 'alternate') return href;
+      if (!fallback) fallback = href;
+    }
+  }
+  return fallback;
 }
 
 function stripHtml(s) {

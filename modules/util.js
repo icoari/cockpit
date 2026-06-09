@@ -34,6 +34,7 @@ export function formatTime(d) {
 }
 
 export function timeAgo(date) {
+  if (!date || Number.isNaN(date.getTime?.())) return '';
   const diff = (Date.now() - date.getTime()) / 1000;
   if (diff < 60) return 'à l\'instant';
   if (diff < 3600) return `il y a ${Math.floor(diff / 60)} min`;
@@ -56,6 +57,24 @@ export function escapeHTML(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// Only allow http(s) URLs in href/style sinks — feed data is third-party.
+export function safeUrl(url) {
+  if (typeof url !== 'string') return '';
+  try {
+    const u = new URL(url, location.href);
+    if (u.protocol === 'https:' || u.protocol === 'http:') return u.toString();
+  } catch {}
+  return '';
+}
+
+// For CSS url('...') contexts: https-only and quote/paren-free.
+export function safeCssUrl(url) {
+  const s = safeUrl(url);
+  if (!s || !s.startsWith('https:')) return '';
+  if (/['"()\\]/.test(s)) return '';
+  return s;
 }
 
 export function debounce(fn, delay) {

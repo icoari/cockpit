@@ -278,6 +278,9 @@ body.theme-light .home-greeting::before {
   line-height: 1.5;
   color: var(--text);
   letter-spacing: -0.01em;
+  /* Reserve roughly 3 lines of height so the layout doesn't shift down
+     when the LLM greeting arrives 2-3 s after first paint. */
+  min-height: 4.5em;
 }
 .home-greeting__body p { margin: 0; }
 .home-greeting__body strong { font-weight: 700; }

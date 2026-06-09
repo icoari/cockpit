@@ -61,7 +61,10 @@ function setActiveTab(name, opts = {}) {
 
   document.getElementById('pageSection').textContent = TAB_LABELS[name] || '';
   updateSettings({ activeTab: name });
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  // Instant scroll so the swipe / tap feels immediate; smooth scroll
+  // sometimes finishes ~half a second after the swipe and reads as a
+  // delayed shift.
+  window.scrollTo(0, 0);
   if (name === 'projets') refreshProjectStats();
   if (name === 'trains')  prioritizeTrainsByLocation();
   if (name === 'home' && widgets.home) widgets.home.refresh();
@@ -117,9 +120,8 @@ function initTabs() {
     });
   }
 
-  let saved = getSettings().activeTab || 'home';
-  if (!VISIBLE_TABS.includes(saved) && saved !== 'settings') saved = 'home';
-  setActiveTab(saved);
+  // App always opens on Accueil — explicit user choice.
+  setActiveTab('home');
 }
 
 // ---------- Widgets ----------

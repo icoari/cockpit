@@ -282,13 +282,13 @@ export class TrainsWidget {
   }
 
   async refreshAller(settings, force) {
-    // Both subtabs: from Conflans Fin d'Oise (43114). Filter by line + Paris-bound
     const stopRef = settings.idfm.stops.conflansFinDOise;
     const lineRef = this.subtab === 'rer' ? settings.idfm.lines.rerA : settings.idfm.lines.transilienJ;
     const data = await fetchStop(stopRef, settings.idfm.apiKey, { force });
     const all = extractDepartures(data);
     const filtered = all.filter(d => isParisBoundFromConflans(d, lineRef));
     const trimmed = filtered.slice(0, 3);
+    this.items = trimmed;
     this.setBody(renderList(trimmed), this.buildSummary(trimmed));
   }
 
@@ -317,6 +317,7 @@ export class TrainsWidget {
       html += `<div class="train-section-label train-section-label--backup">Vers Conflans-Sainte-Honorine</div>`;
       html += renderList(backup);
     }
+    this.items = primary.length ? primary : backup;
     this.setBody(html, this.buildSummary(primary.length ? primary : backup));
   }
 
@@ -344,6 +345,7 @@ export class TrainsWidget {
     if (filtered.length === 0) {
       html += `<div class="card__empty" style="margin-top:8px">Aucun RER A vers Conflans Fin d'Oise depuis cette gare en ce moment. Bascule sur "Transilien J" pour le backup via Saint-Lazare.</div>`;
     }
+    this.items = filtered;
     this.setBody(html, this.buildSummary(filtered) + (usedGeoloc ? ` · ${station.name}` : ''));
   }
 }

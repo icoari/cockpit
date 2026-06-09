@@ -477,6 +477,7 @@ export class SettingsPanel {
       <div class="btn-row">
         <button class="btn" type="button" data-action="sync-setup">Activer la sync</button>
         <button class="btn btn--ghost" type="button" data-action="sync-unlock">Restaurer depuis le cloud</button>
+        <button class="btn btn--danger" type="button" data-action="sync-wipe-cold">Effacer la sauvegarde cloud</button>
       </div>
     `;
   }
@@ -494,6 +495,7 @@ export class SettingsPanel {
       if (action === 'sync-now') return this.runPushNow();
       if (action === 'sync-disable-local') return this.runDisableLocal();
       if (action === 'sync-wipe') return this.runWipe();
+      if (action === 'sync-wipe-cold') return this.runWipeFromInit();
     });
   }
 
@@ -565,6 +567,21 @@ export class SettingsPanel {
       this.onChange();
     } catch (err) {
       alert('Wipe échoué : ' + (err.message || err));
+    }
+  }
+
+  // Wipe from the un-activated state — needs the passphrase to authenticate
+  // against the Worker, then wipes everything and clears local sync state.
+  async runWipeFromInit() {
+    const pp = prompt('Passphrase pour confirmer l\'effacement de la sauvegarde cloud :');
+    if (!pp) return;
+    try {
+      await unlockSync(pp);
+      await wipeRemote();
+      this.render();
+      this.onChange();
+    } catch (err) {
+      alert('Effacement échoué : ' + (err.message || err));
     }
   }
 }

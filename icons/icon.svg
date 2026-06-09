@@ -1,19 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Bob — le clin d'œil qui déborde. Noir profond, deux tons, composition
+       décentrée : le sourire s'échappe du cadre à droite. -->
   <defs>
-    <radialGradient id="bg" cx="50%" cy="22%" r="85%">
-      <stop offset="0%" stop-color="#1B1832"/>
-      <stop offset="55%" stop-color="#11101C"/>
-      <stop offset="100%" stop-color="#080810"/>
-    </radialGradient>
+    <clipPath id="frame"><rect width="512" height="512" rx="116"/></clipPath>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <!-- Smile: warm wide arc -->
-  <path d="M 148 290 Q 256 388 364 290"
-        stroke="#7FD1B9" stroke-width="24"
-        fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- Left eye: open round dot -->
-  <circle cx="184" cy="212" r="20" fill="#7FD1B9"/>
-  <!-- Right eye: closed wink (horizontal stroke) -->
-  <line x1="290" y1="212" x2="346" y2="212"
-        stroke="#7FD1B9" stroke-width="22" stroke-linecap="round"/>
+  <g clip-path="url(#frame)">
+    <rect width="512" height="512" fill="#070709"/>
+    <!-- pixel signature, coin haut-gauche -->
+    <rect x="92" y="92" width="28" height="28" rx="8" fill="#7FD1B9" opacity="0.92"/>
+    <!-- œil gauche : carré arrondi -->
+    <rect x="238" y="196" width="46" height="46" rx="15" fill="#7FD1B9"/>
+    <!-- œil droit : clin d'œil en diagonale -->
+    <line x1="360" y1="225" x2="424" y2="201" stroke="#7FD1B9" stroke-width="26" stroke-linecap="round"/>
+    <!-- sourire : grand arc qui sort du cadre -->
+    <path d="M 216 322 Q 348 448 540 330" stroke="#F4F2EE" stroke-width="30" fill="none" stroke-linecap="round"/>
+  </g>
 </svg>

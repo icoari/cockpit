@@ -161,6 +161,24 @@ export class HomeWidget {
     this.firstBoot = true;
     this.render();
     this.bootstrap();
+
+    // The other widgets (trains, calendar) fetch asynchronously — catch
+    // their data as it lands with a few staggered early refreshes, then
+    // keep the page alive with a 60 s soft refresh.
+    [2500, 6000, 12000].forEach(ms => setTimeout(() => this.softRefresh(), ms));
+    setInterval(() => {
+      if (!document.hidden) this.softRefresh();
+    }, 60_000);
+  }
+
+  // Re-gather context and re-render the data sections without touching
+  // the greeting (which has its own TTL logic).
+  async softRefresh() {
+    this.context = await this.gatherContext();
+    this.renderTiles();
+    this.renderPrios();
+    this.renderProjects();
+    if (this.shouldRegenerate()) this.regenerateGreeting();
   }
 
   render() {
@@ -190,6 +208,12 @@ export class HomeWidget {
         e.preventDefault(); e.stopPropagation();
         haptic(4);
         this.regenerateGreeting(true);
+        return;
+      }
+      const tile = e.target.closest('[data-goto]');
+      if (tile && tile.dataset.goto) {
+        haptic(4);
+        document.dispatchEvent(new CustomEvent('bob-goto-tab', { detail: { tab: tile.dataset.goto } }));
         return;
       }
       const card = e.target.closest('[data-home-project]');
@@ -261,19 +285,22 @@ export class HomeWidget {
         label: 'Météo',
         value: `${c.weather.temp}°`,
         sub: weatherLabelFromCode(c.weather.code),
+        goto: 'perso',
       });
     }
     if (c.train) {
       tiles.push({
-        label: 'Train aller',
+        label: c.train.line ? `Train · ${c.train.line}` : 'Train aller',
         value: c.train.cancelled ? 'supprimé' : c.train.time,
         sub: c.train.cancelled ? '—' : (c.train.minUntil <= 1 ? 'imminent' : `dans ${c.train.minUntil} min`),
+        goto: 'trains',
       });
     } else {
       tiles.push({
         label: 'Train aller',
         value: '—',
-        sub: 'pas de donnée',
+        sub: 'chargement…',
+        goto: 'trains',
       });
     }
     const nextEvent = c.calendar[0];
@@ -283,13 +310,14 @@ export class HomeWidget {
       sub: nextEvent
         ? `${nextEvent.start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · ${nextEvent.title.slice(0, 24)}`
         : 'rien aujourd\'hui',
+      goto: 'perso',
     });
     el.innerHTML = tiles.map(t => `
-      <div class="home-tile">
+      <button class="home-tile" type="button" data-goto="${escapeHTML(t.goto || '')}">
         <span class="home-tile__label">${escapeHTML(t.label)}</span>
         <span class="home-tile__value">${escapeHTML(t.value)}</span>
         <span class="home-tile__sub">${escapeHTML(t.sub)}</span>
-      </div>
+      </button>
     `).join('');
   }
 

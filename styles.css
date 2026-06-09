@@ -204,24 +204,26 @@ button {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  animation: paneIn 320ms var(--ease-out);
 }
 
 .pane[hidden] { display: none; }
 
-/* Swipe transitions — slide-in when changing tabs via gesture */
+/* Swipe transitions — the pane has NO base animation (a base animation
+   would restart the moment the swipe class is removed, producing a
+   delayed downward jump). The slide only exists while the body carries
+   the swipe class; app.js removes it on animationend. */
 body.swipe-next .pane:not([hidden]) {
-  animation: paneSwipeFromRight 280ms var(--ease-out);
+  animation: paneSwipeFromRight 260ms var(--ease-out);
 }
 body.swipe-prev .pane:not([hidden]) {
-  animation: paneSwipeFromLeft 280ms var(--ease-out);
+  animation: paneSwipeFromLeft 260ms var(--ease-out);
 }
 @keyframes paneSwipeFromRight {
-  from { opacity: 0; transform: translateX(28px); }
+  from { opacity: 0; transform: translateX(26px); }
   to   { opacity: 1; transform: translateX(0); }
 }
 @keyframes paneSwipeFromLeft {
-  from { opacity: 0; transform: translateX(-28px); }
+  from { opacity: 0; transform: translateX(-26px); }
   to   { opacity: 1; transform: translateX(0); }
 }
 
@@ -333,7 +335,19 @@ body.theme-light .home-greeting::before {
   box-shadow: var(--elev-1);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  font-family: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition: background 180ms var(--ease), border-color 180ms var(--ease), transform 180ms var(--ease);
+  -webkit-tap-highlight-color: transparent;
 }
+.home-tile:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+.home-tile:active { transform: scale(0.985); }
 
 .home-tile__label {
   font-size: 9.5px;
@@ -486,8 +500,8 @@ body.theme-light .home-greeting::before {
 }
 
 @keyframes homeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
    (defaults to "aller" first = morning use case). When the user's
    location is clearly Paris, retour gets surfaced first. */
@@ -521,8 +535,8 @@ body.loc-paris .pane[data-pane="trains"] [data-widget="trains-retour"] { order: 
 }
 
 @keyframes routeDiagramIn {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .route-diagram::before {
@@ -697,15 +711,9 @@ body.loc-paris .route-diagram__pulse {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  animation: paneIn 240ms var(--ease-out);
 }
 
 .subtab-pane[hidden] { display: none; }
-
-@keyframes paneIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
 
 /* ============================================================
    Page header (large title, inside scroll)

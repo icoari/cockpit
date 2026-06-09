@@ -121,8 +121,10 @@ function initTabs() {
     });
   }
 
-  // App always opens on Accueil — explicit user choice.
-  setActiveTab('home');
+  // App opens on Accueil, unless a push notification deep-links to a tab
+  // (?goto=trains|pro|…).
+  const goto = new URLSearchParams(location.search).get('goto');
+  setActiveTab(VISIBLE_TABS.includes(goto) ? goto : 'home');
 }
 
 // ---------- Widgets ----------
@@ -200,10 +202,15 @@ function initSwipeNavigation() {
 
     document.body.classList.remove('swipe-prev', 'swipe-next');
     document.body.classList.add(dx > 0 ? 'swipe-prev' : 'swipe-next');
-    setTimeout(() => document.body.classList.remove('swipe-prev', 'swipe-next'), 350);
     swipeJustFired = Date.now();
     haptic(3);
     setActiveTab(VISIBLE_TABS[newIdx]);
+    // Drop the swipe class exactly when the slide finishes — a timer can
+    // remove it early/late and a base animation would then restart.
+    const pane = document.querySelector('.pane:not([hidden])');
+    const clear = () => document.body.classList.remove('swipe-prev', 'swipe-next');
+    if (pane) pane.addEventListener('animationend', clear, { once: true });
+    setTimeout(clear, 600);   // safety net if animationend never fires
   }, { passive: true });
 
   // Absorb the SINGLE synthesized click that fires on whatever was under
@@ -525,6 +532,12 @@ document.addEventListener('bob-open-project', (e) => {
   if (name === 'health' || name === 'writer' || name === 'beiue') openProject(name);
 });
 
+// Home tiles navigate to their related tab.
+document.addEventListener('bob-goto-tab', (e) => {
+  const tab = e.detail?.tab;
+  if (VISIBLE_TABS.includes(tab)) setActiveTab(tab);
+});
+
 // Keep the Worker's monitoring config in sync with the current settings
 // (IDFM key, alert toggles, stop coords). Fire-and-forget on startup.
 pushMonitoring();
@@ -562,5 +575,14 @@ window.addEventListener('focus', () => reconcile());
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('service-worker.js').catch(() => {});
+  });
+  // A notification tap on an already-open Bob posts the target URL here —
+  // route the ?goto= tab without a reload.
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data?.type !== 'notification-clicked') return;
+    try {
+      const goto = new URL(e.data.url, location.href).searchParams.get('goto');
+      if (VISIBLE_TABS.includes(goto)) setActiveTab(goto);
+    } catch {}
   });
 }

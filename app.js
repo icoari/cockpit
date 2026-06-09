@@ -101,11 +101,6 @@ function initTabs() {
       e.stopPropagation();
       haptic(4);
       setActiveTab(btn.dataset.tab);
-      const main = document.querySelector('.app');
-      if (main) {
-        main.style.pointerEvents = 'none';
-        setTimeout(() => { main.style.pointerEvents = ''; }, 350);
-      }
     });
   });
 
@@ -150,23 +145,26 @@ function mountWidgets() {
 // ---------- Swipe navigation between tabs ----------
 function initSwipeNavigation() {
   const SWIPE_X_MIN = 70;
-  const SWIPE_RATIO = 1.5;
+  const SWIPE_RATIO = 1.6;
   const MAX_DURATION = 600;
   let start = null;
   let cancelled = false;
+  let swipeJustFired = 0;
 
-  const isExcluded = (el) => {
+  // Only block swipe when the touch originates inside something that
+  // legitimately needs horizontal interaction or its own scroll behaviour.
+  // Buttons / anchors / cards are fine — a tap stays a tap (dx stays small),
+  // a swipe becomes a swipe (dx grows).
+  const isSwipeBlocker = (el) => {
     if (!el) return false;
-    // Ignore swipes that originated in interactive controls or horizontally
-    // scrollable bits (chip rows, input pickers, etc.)
-    return !!el.closest('input, textarea, select, button, a, [data-no-swipe], .pro2-later, .modal');
+    return !!el.closest('input, textarea, select, [data-no-swipe], .modal-backdrop');
   };
 
   document.addEventListener('touchstart', (e) => {
     cancelled = false;
     if (e.touches.length !== 1) { cancelled = true; return; }
     if (document.body.classList.contains('project-open')) { cancelled = true; return; }
-    if (isExcluded(e.target)) { cancelled = true; return; }
+    if (isSwipeBlocker(e.target)) { cancelled = true; return; }
     const t = e.touches[0];
     start = { x: t.clientX, y: t.clientY, time: Date.now() };
   }, { passive: true });
@@ -176,7 +174,7 @@ function initSwipeNavigation() {
     const t = e.touches[0];
     const dy = Math.abs(t.clientY - start.y);
     const dx = Math.abs(t.clientX - start.x);
-    if (dy > 30 && dy > dx) cancelled = true;  // user is scrolling vertically
+    if (dy > 24 && dy > dx) cancelled = true;
   }, { passive: true });
 
   document.addEventListener('touchend', (e) => {
@@ -191,7 +189,7 @@ function initSwipeNavigation() {
     if (Math.abs(dx) < Math.abs(dy) * SWIPE_RATIO) return;
 
     const cur = getSettings().activeTab;
-    if (cur === 'settings') return;          // swipe doesn't traverse settings
+    if (cur === 'settings') return;
     const idx = VISIBLE_TABS.indexOf(cur);
     if (idx === -1) return;
     const newIdx = dx > 0 ? idx - 1 : idx + 1;
@@ -200,9 +198,20 @@ function initSwipeNavigation() {
     document.body.classList.remove('swipe-prev', 'swipe-next');
     document.body.classList.add(dx > 0 ? 'swipe-prev' : 'swipe-next');
     setTimeout(() => document.body.classList.remove('swipe-prev', 'swipe-next'), 350);
+    swipeJustFired = Date.now();
     haptic(3);
     setActiveTab(VISIBLE_TABS[newIdx]);
   }, { passive: true });
+
+  // Absorb the synthesized click that fires on whatever was under the finger
+  // when a swipe completed — otherwise tapping over a card to swipe would
+  // also activate that card.
+  document.addEventListener('click', (e) => {
+    if (Date.now() - swipeJustFired < 350) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, true);
 }
 
 // ---------- (legacy sub-tabs — replaced by ProWidget; left as a no-op stub) ----------
@@ -247,12 +256,6 @@ function initSettings() {
       renderHeader();
     }
   );
-
-  // Weather chip → open settings tab
-  document.getElementById('weatherMini').addEventListener('click', () => {
-    haptic(4);
-    setActiveTab('settings');
-  });
 
   // Any element marked [data-open-settings] opens the settings tab
   document.body.addEventListener('click', (e) => {

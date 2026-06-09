@@ -156,6 +156,7 @@ export class HomeWidget {
     this.context = null;
     this.greeting = loadGreeting();
     this.greetingBusy = false;
+    this.firstBoot = true;
     this.render();
     this.bootstrap();
   }
@@ -202,7 +203,16 @@ export class HomeWidget {
     this.renderPrios();
     this.renderProjects();
     if (this.shouldRegenerate()) {
-      this.regenerateGreeting();
+      // On first mount, give the other widgets a moment to fetch their data
+      // so the prompt has something to work with (calendar events, train
+      // departures, headlines). After that, regenerate immediately on each
+      // refresh — the data is already populated.
+      if (this.firstBoot) {
+        this.firstBoot = false;
+        setTimeout(() => this.regenerateGreeting(), 2500);
+      } else {
+        this.regenerateGreeting();
+      }
     }
   }
 
@@ -212,11 +222,19 @@ export class HomeWidget {
     const age = Date.now() - this.greeting.generatedAt;
     if (age > GREETING_HARD_TTL_MS) return true;
     if (age > GREETING_TTL_MS) {
-      // Regenerate if the day has changed since last greeting.
       const last = new Date(this.greeting.generatedAt).toDateString();
       return last !== new Date().toDateString();
     }
+    // Also regenerate if the cached greeting was built on a thin context but
+    // we now have real data to work with.
+    if (this.greeting.thin && this.hasMeaningfulContext()) return true;
     return false;
+  }
+
+  hasMeaningfulContext() {
+    const c = this.context;
+    if (!c) return false;
+    return !!(c.weather || (c.calendar && c.calendar.length) || c.train || (c.headlines && c.headlines.length));
   }
 
   async gatherContext() {
@@ -337,8 +355,11 @@ export class HomeWidget {
         { temperature: 0.45, maxTokens: 220 },
       );
       const trimmed = (text || '').trim();
-      this.greeting = { text: trimmed, generatedAt: Date.now() };
-      saveGreeting(this.greeting);
+      const thin = !this.hasMeaningfulContext();
+      this.greeting = { text: trimmed, generatedAt: Date.now(), thin };
+      // Don't bake an obviously-empty context into the 4 h cache — the next
+      // refresh will replace it as soon as we have real data.
+      if (!thin) saveGreeting(this.greeting);
       if (body) body.innerHTML = tinyMd(trimmed);
     } catch (e) {
       if (body) body.innerHTML = `<p class="home-greeting__placeholder" style="color:var(--danger)">Échec : ${escapeHTML(e.message)}</p>`;

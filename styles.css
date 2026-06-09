@@ -238,6 +238,12 @@ body.loc-paris .pane[data-pane="trains"] [data-widget="trains-retour"] { order: 
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   position: relative;
   overflow: hidden;
+  animation: routeDiagramIn 480ms var(--ease-out) backwards;
+}
+
+@keyframes routeDiagramIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .route-diagram::before {
@@ -327,14 +333,17 @@ body.theme-light .route-diagram__icon--city {
 
 .route-diagram__pulse {
   position: absolute;
+  /* Track inner padding (6px) + half of SVG height (9px) = 15px from top,
+     pulled up by half its own height via transform so the centre is on
+     the dashed line. */
   top: 15px;
   left: 6%;
   width: 9px;
   height: 9px;
-  margin-left: -4.5px;
   border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 0 5px var(--accent-soft);
+  transform: translate(-50%, -50%);
   animation: route-pulse 3.6s ease-in-out infinite;
   pointer-events: none;
 }
@@ -641,7 +650,28 @@ body.theme-light .card::before {
   background: rgba(255, 255, 255, 0.025);
   border: 1px solid var(--border);
   border-radius: 14px;
-  transition: background 160ms var(--ease);
+  transition: background 200ms var(--ease), transform 200ms var(--ease), border-color 200ms var(--ease);
+  animation: trainRowIn 360ms var(--ease-out) backwards;
+}
+body.theme-light .train-row { background: rgba(20, 20, 30, 0.03); }
+.train-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-strong);
+}
+body.theme-light .train-row:hover { background: rgba(20, 20, 30, 0.05); }
+
+.train-row:nth-child(1) { animation-delay: 0ms; }
+.train-row:nth-child(2) { animation-delay: 40ms; }
+.train-row:nth-child(3) { animation-delay: 80ms; }
+.train-row:nth-child(4) { animation-delay: 120ms; }
+.train-row:nth-child(5) { animation-delay: 160ms; }
+.train-row:nth-child(6) { animation-delay: 200ms; }
+.train-row:nth-child(7) { animation-delay: 240ms; }
+.train-row:nth-child(8) { animation-delay: 280ms; }
+
+@keyframes trainRowIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .train-row__when--now {
@@ -650,6 +680,26 @@ body.theme-light .card::before {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--accent);
+  position: relative;
+  padding-left: 13px;
+}
+.train-row__when--now::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 var(--accent-glow);
+  animation: nowPulse 1.8s ease-out infinite;
+}
+
+@keyframes nowPulse {
+  0%   { box-shadow: 0 0 0 0   var(--accent-glow); }
+  70%  { box-shadow: 0 0 0 7px rgba(127, 209, 185, 0); }
+  100% { box-shadow: 0 0 0 0   rgba(127, 209, 185, 0); }
 }
 
 .train-row--last {
@@ -734,8 +784,20 @@ body.theme-light .card::before {
   background: rgba(255, 255, 255, 0.025);
   border: 1px solid var(--border);
   border-radius: 14px;
+  animation: trainRowIn 360ms var(--ease-out) backwards;
+  transition: background 200ms var(--ease), border-color 200ms var(--ease);
 }
-body.theme-light .last-train-row { background: rgba(20, 20, 30, 0.025); }
+body.theme-light .last-train-row { background: rgba(20, 20, 30, 0.03); }
+.last-train-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-strong);
+}
+body.theme-light .last-train-row:hover { background: rgba(20, 20, 30, 0.05); }
+
+.last-train-row:nth-child(1) { animation-delay: 60ms; }
+.last-train-row:nth-child(2) { animation-delay: 120ms; }
+.last-train-row:nth-child(3) { animation-delay: 180ms; }
+.last-train-row:nth-child(4) { animation-delay: 240ms; }
 
 .last-train-row__line {
   font-size: 10px;

@@ -63,6 +63,8 @@ export default {
       if (p === '/push/subscribe')      return assertMethod(request, 'POST', () => handlePushSubscribe(request, env));
       if (p === '/push/unsubscribe')    return assertMethod(request, 'DELETE', () => handlePushUnsubscribe(request, env));
 
+      if (p === '/llm')                 return assertMethod(request, 'POST', () => handleLlm(request, env));
+
       return json({ error: 'not found' }, 404);
     } catch (err) {
       return json({ error: err.message || 'internal error' }, 500);
@@ -293,6 +295,74 @@ async function handlePushUnsubscribe(request, env) {
   if (!await verifyAuth(request, env)) return json({ error: 'unauthorized' }, 401);
   await env.KV.delete(KEY_PUSH);
   return json({ ok: true });
+}
+
+// ====================================================================
+// /llm — authenticated transparent proxy to any OpenAI-compatible
+// chat-completions endpoint (Azure OpenAI, Azure AI Foundry / Anthropic,
+// LiteLLM, OpenAI). Required because most managed LLM endpoints don't
+// expose CORS for browser direct calls.
+//
+// Headers expected (all from the client):
+//   Authorization:     Bearer <user sync token>
+//   X-LLM-Endpoint:    full upstream URL (must be https://)
+//   X-LLM-Key:         upstream API key
+//   X-LLM-Auth-Style:  'bearer' | 'azure'   (default: bearer)
+// ====================================================================
+
+async function handleLlm(request, env) {
+  if (!await verifyAuth(request, env)) return json({ error: 'unauthorized' }, 401);
+
+  const endpoint = request.headers.get('X-LLM-Endpoint');
+  const upstreamKey = request.headers.get('X-LLM-Key');
+  const authStyle = (request.headers.get('X-LLM-Auth-Style') || 'bearer').toLowerCase();
+  const format = (request.headers.get('X-LLM-Format') || 'openai').toLowerCase();
+
+  if (!endpoint || !upstreamKey) {
+    return json({ error: 'missing X-LLM-Endpoint or X-LLM-Key' }, 400);
+  }
+
+  let u;
+  try { u = new URL(endpoint); }
+  catch { return json({ error: 'invalid endpoint URL' }, 400); }
+  if (u.protocol !== 'https:') return json({ error: 'endpoint must be https' }, 400);
+
+  const upstreamHeaders = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json, text/event-stream',
+  };
+  if (authStyle === 'azure') upstreamHeaders['api-key'] = upstreamKey;
+  else upstreamHeaders['Authorization'] = `Bearer ${upstreamKey}`;
+
+  // Anthropic Messages API needs an anthropic-version header. Azure AI Foundry
+  // expects the same header when going through /anthropic/v1/messages.
+  if (format === 'anthropic') {
+    upstreamHeaders['anthropic-version'] = '2023-06-01';
+  }
+
+  const body = await request.text();
+
+  let upstream;
+  try {
+    upstream = await fetch(endpoint, {
+      method: 'POST',
+      headers: upstreamHeaders,
+      body,
+    });
+  } catch (e) {
+    return json({ error: 'upstream fetch failed: ' + e.message }, 502);
+  }
+
+  // Pass through the response — including streaming bodies — to the client.
+  const ct = upstream.headers.get('Content-Type') || 'application/json';
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: {
+      ...corsHeaders(),
+      'Content-Type': ct,
+      'Cache-Control': 'no-store',
+    },
+  });
 }
 
 // ====================================================================

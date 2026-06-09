@@ -49,12 +49,20 @@ export class SettingsPanel {
       <div class="settings-section">
         <div class="settings-section__title">Assistant</div>
         <div class="settings-section__desc">
-          Endpoint compatible OpenAI Chat Completions (Azure AI Foundry, LiteLLM proxy, OpenAI…).
-          Pour Azure, l'URL inclut <code>?api-version=…</code> et l'auth est <code>api-key</code>.
+          Transite par ton Worker Cloudflare (la sync doit être activée).
+          Trois cas typiques :
+          <br>· <strong>Azure AI Foundry · Anthropic</strong> — URL <code>…/anthropic/v1/messages?api-version=2024-05-01-preview</code>, format Anthropic, auth api-key
+          <br>· <strong>Azure AI Foundry · OpenAI-compat</strong> — URL <code>…/models/chat/completions?api-version=2024-05-01-preview</code>, format OpenAI, auth api-key
+          <br>· <strong>LiteLLM / OpenAI</strong> — URL <code>…/v1/chat/completions</code>, format OpenAI, auth Bearer
         </div>
-        <input class="input" type="url" placeholder="https://…/chat/completions" data-field="llmEndpoint" value="${escapeHTML(s.llm?.endpoint || '')}">
+        <input class="input" type="url" placeholder="https://…/v1/messages ou /chat/completions" data-field="llmEndpoint" value="${escapeHTML(s.llm?.endpoint || '')}" autocomplete="off" spellcheck="false">
         <input class="input" type="password" placeholder="API key" data-field="llmApiKey" value="${escapeHTML(s.llm?.apiKey || '')}" autocomplete="off" spellcheck="false">
-        <input class="input" type="text" placeholder="Nom du modèle (vide pour Azure)" data-field="llmModel" value="${escapeHTML(s.llm?.model || '')}" autocomplete="off">
+        <input class="input" type="text" placeholder="Modèle (ex. claude-sonnet-4-5, gpt-4o)" data-field="llmModel" value="${escapeHTML(s.llm?.model || '')}" autocomplete="off">
+        <label class="label-row" style="display:block;margin-top:6px">Format de l'API</label>
+        <select class="input" data-field="llmFormat">
+          <option value="openai"    ${(s.llm?.format || 'openai') === 'openai' ? 'selected' : ''}>OpenAI Chat Completions</option>
+          <option value="anthropic" ${s.llm?.format === 'anthropic' ? 'selected' : ''}>Anthropic Messages</option>
+        </select>
         <label class="label-row" style="display:block;margin-top:6px">Authentification</label>
         <select class="input" data-field="llmAuthStyle">
           <option value="bearer" ${s.llm?.authStyle !== 'azure' ? 'selected' : ''}>Bearer (OpenAI / LiteLLM)</option>
@@ -226,6 +234,7 @@ export class SettingsPanel {
           case 'llmApiKey':          settings.llm.apiKey = v.trim(); break;
           case 'llmModel':           settings.llm.model = v.trim(); break;
           case 'llmAuthStyle':       settings.llm.authStyle = v; break;
+          case 'llmFormat':          settings.llm.format = v; break;
           case 'llmEnabled':         settings.llm.enabled = !!v; break;
         }
         save();

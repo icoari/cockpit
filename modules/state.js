@@ -62,6 +62,7 @@ const DEFAULT_SETTINGS = {
     apiKey: '',
     model: '',
     authStyle: 'bearer',
+    format: 'openai',
   },
   encombrants: {
     pattern: 'monthly-2nd-tuesday',

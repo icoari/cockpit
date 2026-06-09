@@ -179,10 +179,15 @@ export class ProWidget {
     listEl.innerHTML = '<div class="card__loading">Agrégation en cours…</div>';
     try {
       pushSources();   // fire & forget — keep Worker's source list current
-      const data = await fetchFeed({ force });
+      let data = await fetchFeed({ force });
+      // Cold KV → trigger an aggregation right now and re-read.
+      if ((data.items || []).length === 0 && data.stale) {
+        listEl.innerHTML = '<div class="card__loading">Première agrégation côté edge…</div>';
+        data = await fetchFeed({ force: true });
+      }
       this.items = data.items || [];
-      if (this.items.length === 0 && data.stale) {
-        listEl.innerHTML = '<div class="card__empty">Le cron va peupler le feed dans la minute qui vient. Tire la page pour rafraîchir.</div>';
+      if (this.items.length === 0) {
+        listEl.innerHTML = '<div class="card__empty">Pas encore d\'items. Vérifie que tes sources sont actives dans Réglages.</div>';
         return;
       }
       this.renderChips();

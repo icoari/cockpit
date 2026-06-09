@@ -148,11 +148,12 @@ export class WriterApp {
         <div class="writer-edit">
           <input class="writer-edit__title" type="text" data-title value="${escapeHTML(c.title)}" placeholder="Titre du chapitre">
           <div class="writer-copilot" data-copilot>
-            <button class="writer-copilot__btn" type="button" data-task="rephrase">Reformuler</button>
             <button class="writer-copilot__btn" type="button" data-task="continue">Continuer</button>
-            <button class="writer-copilot__btn" type="button" data-task="tighten">Resserrer</button>
-            <button class="writer-copilot__btn" type="button" data-task="fix">Corriger</button>
-            <button class="writer-copilot__btn" type="button" data-task="twist">Retournement</button>
+            <button class="writer-copilot__btn" type="button" data-task="expand">Élargir</button>
+            <button class="writer-copilot__btn" type="button" data-task="deepen">Approfondir</button>
+            <button class="writer-copilot__btn" type="button" data-task="character">Personnage</button>
+            <button class="writer-copilot__btn" type="button" data-task="twist">Détour</button>
+            <button class="writer-copilot__btn" type="button" data-task="question">Question</button>
             <span class="writer-copilot__status" data-copilot-status></span>
           </div>
           <textarea class="writer-edit__content" data-content placeholder="Écris...">${escapeHTML(c.content)}</textarea>
@@ -208,9 +209,8 @@ export class WriterApp {
     const selection = full.slice(selStart, selEnd);
     const context = full;
 
-    const needsSelection = ['rephrase', 'tighten', 'fix'].includes(task);
-    if (needsSelection && !selection.trim()) {
-      statusEl.textContent = 'Sélectionne d\'abord un passage.';
+    if (task === 'expand' && !selection.trim()) {
+      statusEl.textContent = 'Sélectionne d\'abord un passage à élargir.';
       return;
     }
 
@@ -218,20 +218,23 @@ export class WriterApp {
     btn.classList.add('writer-copilot__btn--busy');
     statusEl.textContent = 'En cours…';
 
-    // Position where the streamed output goes.
+    // Where the streamed output lands:
+    //  - expand: replaces the selection inline
+    //  - everything else: appends after the cursor as a new paragraph
+    //  - question: also appends, prefixed with a quote marker so it stands out
     let insertStart, insertEnd;
-    if (task === 'continue' || task === 'twist') {
-      insertStart = selEnd;
-      insertEnd = selEnd;
-      // Insert a leading space/newline if needed
-      const prev = full.slice(insertStart - 1, insertStart);
-      const sep = prev && !/\s$/.test(prev) ? '\n\n' : '';
-      contentEl.value = full.slice(0, insertStart) + sep + full.slice(insertStart);
-      insertStart += sep.length;
-      insertEnd = insertStart;
-    } else {
+    if (task === 'expand') {
       insertStart = selStart;
       insertEnd = selEnd;
+    } else {
+      insertStart = selEnd;
+      insertEnd = selEnd;
+      const prev = full.slice(insertStart - 1, insertStart);
+      const sep = prev && !/\s$/.test(prev) ? '\n\n' : '';
+      const prefix = task === 'question' ? '> Q · ' : '';
+      contentEl.value = full.slice(0, insertStart) + sep + prefix + full.slice(insertStart);
+      insertStart += sep.length + prefix.length;
+      insertEnd = insertStart;
     }
 
     let acc = '';

@@ -1,71 +1,91 @@
-// Writer copilot — wraps the assistant with task-specific prompts that work
-// on a textarea: rewrite a selection, continue a passage, suggest a turn,
-// tighten prose, fix grammar.
+// Writer copilot — strictly creative, no correction-style tasks. The point
+// is to provoke or extend, not to police grammar.
 
 import { complete, stream } from './llm.js';
 
-const SYSTEM_WRITER = `Tu es l'assistant d'écriture de Nicolas qui rédige un livre en français.
+const SYSTEM_WRITER = `Tu es l'assistant d'écriture créatif de Nicolas qui rédige un livre en français.
 Tu respectes scrupuleusement son style : phrases nettes, vocabulaire soutenu sans pédanterie, voix narrative claire.
-Pas d'introduction du type "voici la suite". Tu rends UNIQUEMENT le texte demandé, sans guillemets, sans commentaire, sans Markdown.
-Si l'utilisateur demande un raccourci, vise une réduction de 30 à 40% en préservant le sens et la cadence.`;
+Pas d'introduction du type "voici la suite". Tu rends UNIQUEMENT le texte demandé, sans guillemets autour, sans commentaire, sans Markdown.
+Tu n'es JAMAIS dans la correction grammaticale ou orthographique. Tu ne reformules pas pour reformuler. Tu apportes du matériau narratif neuf.`;
+
+const SYSTEM_QUESTION = `Tu es l'assistant d'écriture créatif de Nicolas. Tu poses UNE seule question à Nicolas, concrète, qui pointe vers du matériau narratif possible — un détail, un personnage, une motivation cachée, une bifurcation. Interdit : questions vagues du type "que veux-tu dire ?", "où vas-tu avec ça ?", "et après ?".
+Format : une seule phrase en français, terminée par un point d'interrogation. Rien d'autre. Pas de préambule, pas de Markdown.`;
 
 function buildUser(task, params) {
-  const ctx = params.context ? `Contexte (chapitre en cours, avant la zone à modifier) :\n${params.context.slice(-2000)}\n\n` : '';
+  const ctx = params.context
+    ? `Contexte (le texte écrit jusqu'à présent — pour rester dans le ton) :\n${params.context.slice(-2000)}\n\n`
+    : '';
   switch (task) {
-    case 'rephrase':
-      return `${ctx}Reformule ce passage en gardant exactement le même sens et la même longueur. Améliore la fluidité.
-
-Passage :
-"""
-${params.selection}
-"""`;
     case 'continue':
-      return `${ctx}Continue le texte naturellement. Produis 2 à 4 phrases qui poursuivent la scène, dans le même ton et au même rythme. Pas de méta-commentaire.`;
-    case 'tighten':
-      return `${ctx}Raccourcis ce passage de 30 à 40 % en préservant le sens et la cadence. Élimine redondances et adverbes faibles.
+      return `${ctx}Continue le récit. Deux à quatre phrases qui poursuivent naturellement le passage, dans le même rythme et la même voix. Pas de méta-commentaire, pas de "fin de chapitre".`;
 
-Passage :
-"""
-${params.selection}
-"""`;
-    case 'fix':
-      return `${ctx}Corrige UNIQUEMENT la grammaire, la conjugaison, l'orthographe et la ponctuation. Ne touche pas au style ni au vocabulaire.
+    case 'expand': {
+      const target = (params.selection && params.selection.trim()) || params.context.slice(-800);
+      return `${ctx}Élargis ce passage : enrichis-le sans en changer le sens, en ajoutant matière concrète — gestes, sensations, environnement, micro-événements. Garde le tempo. Rends UNE version élargie complète (3 à 6 phrases), pas une analyse.
 
-Passage :
+Passage de départ :
 """
-${params.selection}
+${target}
 """`;
+    }
+
+    case 'deepen':
+      return `${ctx}Ralentis le tempo ici. Ajoute deux à trois phrases qui ancrent la scène avec du concret — un détail physique, un geste précis, un élément sensoriel inattendu mais juste. Pas d'introspection abstraite ; du tangible.`;
+
     case 'twist':
-      return `${ctx}Propose un retournement narratif ou un détail concret qui pourrait suivre, en une seule phrase descriptive. Tu peux contredire la trajectoire actuelle si c'est plus intéressant.`;
-    case 'summarize':
-      return `${ctx}Résume le chapitre en 5 puces concises (mode plan), sans rentrer dans le détail des phrases — juste les beats narratifs.
+      return `${ctx}Introduis un élément qui change le sens : un personnage qui entre, un détail qui réoriente, une phrase qui ouvre une piste latérale. Une à trois phrases. Doit s'intégrer naturellement à la suite du texte.`;
 
-Texte :
+    case 'character': {
+      const target = (params.selection && params.selection.trim()) || params.context.slice(-1000);
+      return `${ctx}Introduis ici un nouveau personnage. Donne-le en deux phrases maximum : une caractéristique physique précise (pas un cliché), un détail comportemental ou un objet associé. Ne nomme pas le personnage si le texte n'en attendait pas. Reste dans la scène — ne saute pas dans le temps.
+
+Passage qui précède :
 """
-${params.selection || params.context}
+${target}
 """`;
+    }
+
     default:
       throw new Error(`Tâche copilote inconnue : ${task}`);
   }
 }
 
 export async function runCopilot(task, params) {
+  if (task === 'question') {
+    return complete(
+      [
+        { role: 'system', content: SYSTEM_QUESTION },
+        { role: 'user', content: `Contexte récent :\n${(params.context || '').slice(-1500)}\n\nPose-moi la question.` },
+      ],
+      { temperature: 0.7, maxTokens: 200 },
+    );
+  }
   return complete(
     [
       { role: 'system', content: SYSTEM_WRITER },
       { role: 'user', content: buildUser(task, params) },
     ],
-    { temperature: task === 'fix' ? 0.1 : 0.6, maxTokens: 800 },
+    { temperature: 0.6, maxTokens: 800 },
   );
 }
 
 export async function streamCopilot(task, params, onChunk) {
+  if (task === 'question') {
+    return stream(
+      [
+        { role: 'system', content: SYSTEM_QUESTION },
+        { role: 'user', content: `Contexte récent :\n${(params.context || '').slice(-1500)}\n\nPose-moi la question.` },
+      ],
+      onChunk,
+      { temperature: 0.7, maxTokens: 200 },
+    );
+  }
   return stream(
     [
       { role: 'system', content: SYSTEM_WRITER },
       { role: 'user', content: buildUser(task, params) },
     ],
     onChunk,
-    { temperature: task === 'fix' ? 0.1 : 0.6, maxTokens: 800 },
+    { temperature: 0.6, maxTokens: 800 },
   );
 }

@@ -17,9 +17,9 @@ const DEFAULT_SETTINGS = {
     },
   },
   location: {
-    lat: 49.005,
-    lon: 2.099,
-    name: 'Conflans',
+    lat: null,
+    lon: null,
+    name: '',
   },
   gas: {
     radiusKm: 8,
@@ -67,7 +67,7 @@ const DEFAULT_SETTINGS = {
   encombrants: {
     pattern: 'monthly-2nd-tuesday',
     extraDates: [],
-    address: 'Conflans-Sainte-Honorine',
+    address: '',
   },
   collectes: {
     // Each: enabled (bool), pattern (string), label (string)

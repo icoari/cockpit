@@ -91,10 +91,9 @@ export class SettingsPanel {
       </div>
 
       <div class="settings-section">
-        <div class="settings-section__title">Encombrants — ${escapeHTML(s.encombrants?.address || 'adresse')}</div>
+        <div class="settings-section__title">Encombrants${s.encombrants?.address ? ' — ' + escapeHTML(s.encombrants.address) : ''}</div>
         <div class="settings-section__desc">
-          À Conflans-Sainte-Honorine, le calendrier dépend du type de logement.
-          Dépôt la veille à partir de 19h. Renseignements GPSEO : 01 30 33 90 00.
+          Calendrier de ramassage des encombrants. Choisis ton pattern + d'éventuelles dates exceptionnelles.
         </div>
         <input class="input" type="text" placeholder="Adresse" data-field="encombrantsAddress" value="${escapeHTML(s.encombrants?.address || '')}">
         <label class="label-row" style="display:block;margin-top:6px">Calendrier</label>

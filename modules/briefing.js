@@ -50,7 +50,7 @@ export async function generateBrief({ feedItems, calendar = [], weather = null, 
   const today = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
   const contextBlocks = [];
-  if (weather) contextBlocks.push(`Météo Conflans : ${weather.tempNow}°C, ${weather.label}`);
+  if (weather) contextBlocks.push(`Météo locale : ${weather.tempNow}°C, ${weather.label}`);
   if (trains?.next) contextBlocks.push(`Prochain train aller : ${trains.next}`);
   if (calendar.length > 0) {
     contextBlocks.push('Agenda aujourd\'hui :\n' + calendar.map(e => `- ${e.time || 'journée'} · ${e.title}`).join('\n'));

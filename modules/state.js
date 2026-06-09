@@ -1,4 +1,5 @@
 import { safeJSON, uid, todayKey } from './util.js';
+import { schedulePush } from './sync.js';
 
 const KEY = 'cockpit-v3';
 
@@ -171,6 +172,20 @@ export function getSettings() { return state.settings; }
 export function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); }
   catch (e) { console.error('Storage failed', e); }
+  schedulePush(buildSyncPayload);
+}
+
+// Snapshot for cloud sync. Identical shape to exportData() — strips OAuth
+// token, drops volatile cache, and pulls in writer + health-tracker blobs.
+export function buildSyncPayload() {
+  const snapshot = structuredClone(state);
+  if (snapshot.settings?.calendar) snapshot.settings.calendar.token = null;
+  delete snapshot.cache;
+  return JSON.stringify({
+    ...snapshot,
+    _writer: readLocalJSON(WRITER_KEY),
+    _healthTracker: readLocalJSON(HEALTH_KEY),
+  });
 }
 
 export function updateSettings(patch) {

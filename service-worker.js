@@ -1,4 +1,4 @@
-const CACHE = 'bob-v29';
+const CACHE = 'bob-v30';
 const ASSETS = [
   './',
   './index.html',
@@ -23,6 +23,8 @@ const ASSETS = [
   './modules/hackernews.js',
   './modules/writer.js',
   './modules/settings.js',
+  './modules/crypto.js',
+  './modules/sync.js',
   './icons/icon.svg',
 ];
 
@@ -53,7 +55,7 @@ self.addEventListener('fetch', (e) => {
    || url.hostname.includes('googleapis.com')
    || url.hostname.includes('accounts.google.com')
    || url.hostname.includes('overpass-api.de')
-   || url.hostname.includes('codetabs.com')
+   || url.hostname.includes('bob.jz7w76ry59.workers.dev')
    || url.hostname.includes('data.iledefrance.fr')
    || url.hostname.includes('youtube.com')
    || url.hostname.includes('ytimg.com')) {

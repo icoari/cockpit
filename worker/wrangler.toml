@@ -1,0 +1,11 @@
+name = "bob"
+main = "src/index.js"
+compatibility_date = "2026-05-01"
+workers_dev = true
+
+# KV namespace is bound below. The ID is filled in after running:
+#   wrangler kv namespace create bob-kv
+# (the command prints the id; paste it as `id = "..."`).
+[[kv_namespaces]]
+binding = "KV"
+id = "317a9f34cb9d4c1fb377e116cbb8cbed"

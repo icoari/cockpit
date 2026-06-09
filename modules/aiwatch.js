@@ -4,7 +4,7 @@ import { escapeHTML, fetchWithTimeout, timeAgo, haptic, debounce } from './util.
 
 const CACHE_TTL = 10 * 60 * 1000;
 const HN_API = 'https://hn.algolia.com/api/v1/search_by_date';
-const CORS_PROXY = 'https://api.codetabs.com/v1/proxy?quest=';
+const CORS_PROXY = 'https://bob.jz7w76ry59.workers.dev/proxy?url=';
 
 const HN_DEFAULT_QUERIES = {
   ai:   'AI OR LLM OR GPT OR Claude OR Anthropic OR OpenAI',

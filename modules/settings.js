@@ -3,10 +3,14 @@ import {
   addAiSource, toggleAiSource, removeAiSource,
   addYoutubeChannel, toggleYoutubeChannel, removeYoutubeChannel,
   addEncombrantDate, removeEncombrantDate, setEncombrantPattern,
-  exportData, importData, resetAll,
+  exportData, importData, resetAll, buildSyncPayload,
 } from './state.js';
 import { ENCOMBRANTS_PATTERNS } from './bins.js';
 import { escapeHTML } from './util.js';
+import {
+  isSyncEnabled, getSyncMeta, setupSync, unlockSync,
+  disableSyncLocally, wipeRemote, pullNow, schedulePush,
+} from './sync.js';
 
 export class SettingsPanel {
   constructor(rootEl, onChange) {
@@ -154,7 +158,16 @@ export class SettingsPanel {
       </div>
 
       <div class="settings-section">
-        <div class="settings-section__title">Sauvegarde</div>
+        <div class="settings-section__title">Sauvegarde cloud (chiffrée)</div>
+        <div class="settings-section__desc">
+          Sauvegarde end-to-end chiffrée sur Cloudflare. Sans la passphrase,
+          les données sont irrécupérables — note-la dans 1Password.
+        </div>
+        ${this.renderSyncBlock()}
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section__title">Sauvegarde locale</div>
         <div class="btn-row">
           <button class="btn btn--ghost" type="button" data-action="export">Exporter JSON</button>
           <button class="btn btn--ghost" type="button" data-action="import">Importer JSON</button>
@@ -268,8 +281,6 @@ export class SettingsPanel {
         reader.onload = () => {
           try {
             importData(reader.result);
-            // Reload to guarantee every widget (and the health-tracker iframe
-            // on next open) reads the freshly imported state cleanly.
             alert('Import réussi. La page va se recharger.');
             location.reload();
           } catch (err) {
@@ -278,9 +289,120 @@ export class SettingsPanel {
         };
         reader.onerror = () => alert('Lecture du fichier échouée');
         reader.readAsText(file.files[0]);
-        // Reset value so re-selecting the same file still fires `change`
         file.value = '';
       }
     });
+
+    this.attachSyncHandlers();
+  }
+
+  // ---------- Cloud sync (end-to-end encrypted) ----------
+
+  renderSyncBlock() {
+    if (isSyncEnabled()) {
+      const meta = getSyncMeta() || {};
+      const last = meta.lastPushedAt
+        ? new Date(meta.lastPushedAt).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+        : 'jamais';
+      return `
+        <div class="settings-info">✓ Activé sur cet appareil · dernière sync : ${escapeHTML(last)}</div>
+        <div class="btn-row">
+          <button class="btn btn--ghost" type="button" data-action="sync-pull">Restaurer depuis le cloud</button>
+          <button class="btn btn--ghost" type="button" data-action="sync-disable-local">Oublier sur cet appareil</button>
+          <button class="btn btn--danger" type="button" data-action="sync-wipe">Effacer du cloud</button>
+        </div>
+      `;
+    }
+    return `
+      <div class="btn-row">
+        <button class="btn" type="button" data-action="sync-setup">Activer la sync</button>
+        <button class="btn btn--ghost" type="button" data-action="sync-unlock">Restaurer depuis le cloud</button>
+      </div>
+    `;
+  }
+
+  attachSyncHandlers() {
+    this.root.addEventListener('click', async (e) => {
+      const action = e.target.closest('[data-action]')?.dataset.action;
+      if (!action || !action.startsWith('sync-')) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (action === 'sync-setup') return this.runSetup();
+      if (action === 'sync-unlock') return this.runUnlock();
+      if (action === 'sync-pull') return this.runPull();
+      if (action === 'sync-disable-local') return this.runDisableLocal();
+      if (action === 'sync-wipe') return this.runWipe();
+    });
+  }
+
+  async runSetup() {
+    const pp = prompt('Choisis une passphrase forte (au moins 12 caractères). Note-la dans 1Password — sans elle les données sont irrécupérables.');
+    if (!pp) return;
+    if (pp.length < 12) { alert('Minimum 12 caractères.'); return; }
+    const confirm2 = prompt('Re-tape la passphrase pour confirmer :');
+    if (confirm2 !== pp) { alert('Les passphrases ne correspondent pas.'); return; }
+    try {
+      await setupSync(pp);
+      // First push: send the current local state to the cloud immediately.
+      schedulePush(buildSyncPayload);
+      alert('Sync activée. Tes données seront chiffrées et envoyées dans quelques secondes.');
+      this.render();
+      this.onChange();
+    } catch (err) {
+      alert('Activation échouée : ' + (err.message || err));
+    }
+  }
+
+  async runUnlock() {
+    const pp = prompt('Entre la passphrase utilisée à l\'activation :');
+    if (!pp) return;
+    try {
+      const result = await unlockSync(pp);
+      if (result && result.state) {
+        const ok = confirm('Sauvegarde trouvée. Restaurer ? La page se rechargera.');
+        if (!ok) return;
+        importData(JSON.stringify(result.state));
+        location.reload();
+      } else {
+        alert('Sync activée. Aucune sauvegarde existante côté cloud pour le moment.');
+        this.render();
+        this.onChange();
+      }
+    } catch (err) {
+      alert('Déverrouillage échoué : ' + (err.message || err));
+    }
+  }
+
+  async runPull() {
+    try {
+      const result = await pullNow();
+      if (!result || !result.state) { alert('Aucune sauvegarde côté cloud.'); return; }
+      const ok = confirm('Remplacer les données locales par la sauvegarde cloud ? La page se rechargera.');
+      if (!ok) return;
+      importData(JSON.stringify(result.state));
+      location.reload();
+    } catch (err) {
+      alert('Pull échoué : ' + (err.message || err));
+    }
+  }
+
+  async runDisableLocal() {
+    if (!confirm('Oublier les clés sur cet appareil ? Le cloud reste intact, tu pourras restaurer plus tard avec la passphrase.')) return;
+    disableSyncLocally();
+    this.render();
+    this.onChange();
+  }
+
+  async runWipe() {
+    if (!confirm('EFFACER TOUTES les données sur le cloud ? Action irréversible.')) return;
+    try {
+      await wipeRemote();
+      alert('Sauvegarde cloud effacée.');
+      this.render();
+      this.onChange();
+    } catch (err) {
+      alert('Wipe échoué : ' + (err.message || err));
+    }
   }
 }

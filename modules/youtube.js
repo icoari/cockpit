@@ -3,7 +3,7 @@ import { ICONS } from './icons.js';
 import { escapeHTML, fetchWithTimeout, timeAgo, haptic, debounce } from './util.js';
 
 const CACHE_TTL = 10 * 60 * 1000;
-const CORS_PROXY = 'https://api.codetabs.com/v1/proxy?quest=';
+const CORS_PROXY = 'https://bob.jz7w76ry59.workers.dev/proxy?url=';
 const YT_RSS = (channelId) => `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
 const MAX_DAYS = 10;
 const MAX_PER_CHANNEL = 4;

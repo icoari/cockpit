@@ -64,6 +64,11 @@ const DEFAULT_SETTINGS = {
     authStyle: 'bearer',
     format: 'openai',
   },
+  alerts: {
+    trainAlerts: true,
+    morningBrief: true,
+    healthReminder: false,
+  },
   encombrants: {
     pattern: 'monthly-2nd-tuesday',
     extraDates: [],

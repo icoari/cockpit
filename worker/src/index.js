@@ -1,20 +1,12 @@
-// Bob backend Worker — endpoints + scheduled aggregation
+// Bob backend Worker — endpoints + scheduled tasks
 //
-// HTTP routes:
-//   GET    /health
-//   GET    /proxy?url=...        CORS proxy with edge caching (10 min)
-//   GET    /sync/salt            { setup: bool, salt? }
-//   POST   /sync/setup           { salt, authHash }
-//   GET    /sync/data            (auth) returns the encrypted blob
-//   POST   /sync/data            (auth) { iv, ciphertext, version }
-//   DELETE /sync/wipe            (auth) wipes all sync state
-//   GET    /feed                 (auth) returns aggregated feed
-//   POST   /feed/sources         (auth) sets the user's sources (plaintext)
-//   GET    /feed/sources         (auth) returns the user's sources
-//   POST   /push/subscribe       (auth) saves a Web Push subscription
-//   DELETE /push/unsubscribe     (auth) drops the subscription
-//
-// Cron */10 * * * * → scheduled() re-aggregates feeds into KV.
+// Cron schedule:
+//   */10 * * * *     feed aggregation
+//   */5 6-23 * * *   IDFM disruption watch
+//   0 6 * * *        morning brief push (7h Paris summer)
+//   0 21 * * *       health-tracker evening reminder
+
+import { sendWebPush } from './webpush.js';
 
 const KV_PREFIX = 'bobsync:';
 const KEY_SALT = KV_PREFIX + 'salt';
@@ -23,6 +15,9 @@ const KEY_DATA = KV_PREFIX + 'data';
 const KEY_FEED = KV_PREFIX + 'feed';
 const KEY_SOURCES = KV_PREFIX + 'sources';
 const KEY_PUSH = KV_PREFIX + 'push';
+const KEY_MONITORING = KV_PREFIX + 'monitoring';
+const KEY_ALERTED_DISRUPTIONS = KV_PREFIX + 'alertedDisruptions';
+const KEY_HEALTH_PING = KV_PREFIX + 'healthPing';
 
 // Curated baseline sources merged with the user's own — these stay fresh
 // even before the user has configured anything on a new device.
@@ -62,6 +57,12 @@ export default {
 
       if (p === '/push/subscribe')      return assertMethod(request, 'POST', () => handlePushSubscribe(request, env));
       if (p === '/push/unsubscribe')    return assertMethod(request, 'DELETE', () => handlePushUnsubscribe(request, env));
+      if (p === '/push/test')           return assertMethod(request, 'POST', () => handlePushTest(request, env));
+
+      if (p === '/vapid/public')        return json({ publicKey: env.VAPID_PUBLIC_KEY || '' });
+
+      if (p === '/monitoring')          return await handleMonitoring(request, env);
+      if (p === '/health/ping')         return assertMethod(request, 'POST', () => handleHealthPing(request, env));
 
       if (p === '/llm')                 return assertMethod(request, 'POST', () => handleLlm(request, env));
 
@@ -72,7 +73,17 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(aggregateFeed(env));
+    // Dispatch by cron expression — wrangler.toml lists 4 schedules.
+    const cron = event.cron;
+    if (cron === '*/10 * * * *') {
+      ctx.waitUntil(aggregateFeed(env));
+    } else if (cron === '*/5 6-23 * * *') {
+      ctx.waitUntil(checkDisruptions(env));
+    } else if (cron === '0 6 * * *') {
+      ctx.waitUntil(sendMorningBriefPush(env));
+    } else if (cron === '0 21 * * *') {
+      ctx.waitUntil(sendHealthReminder(env));
+    }
   },
 };
 
@@ -295,6 +306,238 @@ async function handlePushUnsubscribe(request, env) {
   if (!await verifyAuth(request, env)) return json({ error: 'unauthorized' }, 401);
   await env.KV.delete(KEY_PUSH);
   return json({ ok: true });
+}
+
+async function handlePushTest(request, env) {
+  if (!await verifyAuth(request, env)) return json({ error: 'unauthorized' }, 401);
+  const subRaw = await env.KV.get(KEY_PUSH);
+  if (!subRaw) return json({ error: 'aucune souscription enregistrée' }, 404);
+  const sub = JSON.parse(subRaw);
+  try {
+    const resp = await sendWebPush({
+      subscription: sub,
+      payload: JSON.stringify({
+        title: 'Bob · test',
+        body: 'Si tu vois ce message, les notifications sont prêtes.',
+        tag: 'bob-test',
+        url: '/',
+      }),
+      vapid: vapidConfig(env),
+      urgency: 'normal',
+    });
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      return json({ error: `push ${resp.status}: ${text.slice(0, 200)}` }, 502);
+    }
+    return json({ ok: true });
+  } catch (e) {
+    return json({ error: e.message }, 500);
+  }
+}
+
+// ====================================================================
+// /monitoring — client pushes IDFM key + alert preferences. The data is
+// not part of the encrypted sync blob because the scheduled tasks need
+// to read it without user interaction. Trust level: same as the YouTube
+// channels list (plaintext in user-owned KV).
+// ====================================================================
+
+async function handleHealthPing(request, env) {
+  if (!await verifyAuth(request, env)) return json({ error: 'unauthorized' }, 401);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'invalid json' }, 400); }
+  const { date, slot } = body || {};
+  if (typeof date !== 'string' || typeof slot !== 'string') {
+    return json({ error: 'date and slot required' }, 400);
+  }
+  await env.KV.put(KEY_HEALTH_PING, JSON.stringify({ lastEntryDate: date, lastSlot: slot, ts: Date.now() }));
+  return json({ ok: true });
+}
+
+async function handleMonitoring(request, env) {
+  if (!await verifyAuth(request, env)) return json({ error: 'unauthorized' }, 401);
+  if (request.method === 'GET') {
+    const raw = await env.KV.get(KEY_MONITORING);
+    return new Response(raw || '{}', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+    });
+  }
+  if (request.method === 'POST') {
+    let body;
+    try { body = await request.json(); } catch { return json({ error: 'invalid json' }, 400); }
+    await env.KV.put(KEY_MONITORING, JSON.stringify(body));
+    return json({ ok: true });
+  }
+  return json({ error: 'method not allowed' }, 405);
+}
+
+// ====================================================================
+// Push helpers
+// ====================================================================
+
+function vapidConfig(env) {
+  return {
+    publicKey: env.VAPID_PUBLIC_KEY,
+    privateKey: env.VAPID_PRIVATE_KEY,
+    subject: env.VAPID_SUBJECT || 'mailto:bob@local',
+  };
+}
+
+async function getSubscription(env) {
+  const raw = await env.KV.get(KEY_PUSH);
+  return raw ? JSON.parse(raw) : null;
+}
+
+async function getMonitoring(env) {
+  const raw = await env.KV.get(KEY_MONITORING);
+  return raw ? JSON.parse(raw) : {};
+}
+
+async function pushOne(env, payload, opts = {}) {
+  const sub = await getSubscription(env);
+  if (!sub) return false;
+  try {
+    const resp = await sendWebPush({
+      subscription: sub,
+      payload: JSON.stringify(payload),
+      vapid: vapidConfig(env),
+      urgency: opts.urgency || 'normal',
+      ttl: opts.ttl ?? 43200,
+    });
+    if (resp.status === 404 || resp.status === 410) {
+      // Subscription gone — wipe so we don't keep retrying.
+      await env.KV.delete(KEY_PUSH);
+    }
+    return resp.ok;
+  } catch (e) {
+    console.error('push failed', e.message);
+    return false;
+  }
+}
+
+// ====================================================================
+// Cron tasks
+// ====================================================================
+
+// Morning brief push — just nudges the user; the actual digest is generated
+// when they open Bob (the LLM key never leaves the device).
+async function sendMorningBriefPush(env) {
+  const mon = await getMonitoring(env);
+  if (mon.alerts?.morningBrief === false) return;
+  await pushOne(env, {
+    title: 'Brief du jour',
+    body: 'L\'éditorial t\'attend dans Bob → Pro.',
+    tag: 'bob-brief',
+    url: '/?goto=pro',
+  }, { urgency: 'normal' });
+}
+
+// Evening reminder — fired at 23h Paris. Quiet, just a hint.
+async function sendHealthReminder(env) {
+  const mon = await getMonitoring(env);
+  if (mon.alerts?.healthReminder === false) return;
+  // Skip if the client logged a recent entry today.
+  const pingRaw = await env.KV.get(KEY_HEALTH_PING);
+  if (pingRaw) {
+    try {
+      const ping = JSON.parse(pingRaw);
+      const todayISO = new Date().toISOString().slice(0, 10);
+      if (ping.lastEntryDate === todayISO && ping.lastSlot === 'soir') return;
+    } catch {}
+  }
+  await pushOne(env, {
+    title: 'Suivi santé',
+    body: 'Saisi ton soir ? Une minute suffit.',
+    tag: 'bob-health',
+    url: '/?goto=projets',
+  }, { urgency: 'low' });
+}
+
+// IDFM disruption watch — checks the user's lines and pushes once per
+// previously-unseen disruption.
+async function checkDisruptions(env) {
+  const mon = await getMonitoring(env);
+  if (mon.alerts?.trainAlerts === false) return;
+  if (!mon.idfmKey || !Array.isArray(mon.idfmLines) || mon.idfmLines.length === 0) return;
+
+  const alertedRaw = await env.KV.get(KEY_ALERTED_DISRUPTIONS);
+  const alerted = new Set(alertedRaw ? JSON.parse(alertedRaw) : []);
+  const stillActive = new Set();
+  const newAlerts = [];
+
+  for (const lineId of mon.idfmLines) {
+    try {
+      const url = `https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia/lines/${encodeURIComponent(lineId)}/disruptions`;
+      const r = await fetch(url, {
+        headers: { 'apikey': mon.idfmKey },
+        cf: { cacheTtl: 0 },
+      });
+      if (!r.ok) continue;
+      const data = await r.json();
+      const list = data.disruptions || [];
+      const now = Date.now();
+      for (const d of list) {
+        if (!isImpactful(d)) continue;
+        // Skip disruptions that ended already.
+        const ends = (d.application_periods || []).map(p => parseNavitiaDate(p.end)).filter(Boolean);
+        if (ends.length && ends.every(t => t < now)) continue;
+        stillActive.add(d.id);
+        if (alerted.has(d.id)) continue;
+        const title = (d.messages?.[0]?.text || d.disruption_id || 'Perturbation').toString().slice(0, 60);
+        const summary = compactDisruptionText(d);
+        newAlerts.push({ id: d.id, line: lineMnemonic(lineId), title, summary });
+      }
+    } catch (e) {
+      console.error('disruption fetch failed for', lineId, e.message);
+    }
+  }
+
+  // Send one push per new alert (max 3 per cycle to avoid spam).
+  for (const a of newAlerts.slice(0, 3)) {
+    await pushOne(env, {
+      title: `${a.line} · perturbation`,
+      body: a.summary.slice(0, 180),
+      tag: `bob-disr-${a.id}`,
+      url: '/?goto=trains',
+    }, { urgency: 'high', ttl: 6 * 3600 });
+    alerted.add(a.id);
+  }
+
+  // Keep only IDs of currently active disruptions so the set doesn't grow
+  // unbounded; expired disruption IDs would otherwise stay forever.
+  const persist = Array.from(stillActive);
+  await env.KV.put(KEY_ALERTED_DISRUPTIONS, JSON.stringify(persist));
+}
+
+function lineMnemonic(lineId) {
+  if (lineId.includes('C01739')) return 'Transilien J';
+  if (lineId.includes('C01742')) return 'RER A';
+  if (lineId.includes('C01641')) return 'Noctilien N152';
+  return 'Ligne';
+}
+
+function isImpactful(d) {
+  const severity = (d.severity?.effect || d.severity?.name || '').toLowerCase();
+  if (severity.includes('no_service') || severity.includes('blocking')
+      || severity.includes('reduced_service') || severity.includes('detour')
+      || severity.includes('significant_delays')) return true;
+  // Fall back to status heuristics.
+  return (d.status || '').toLowerCase() === 'active';
+}
+
+function compactDisruptionText(d) {
+  const msg = (d.messages?.[0]?.text || '').toString().trim();
+  // Strip HTML
+  return msg.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim() || 'Trafic perturbé sur la ligne.';
+}
+
+function parseNavitiaDate(s) {
+  if (!s) return null;
+  // Navitia format: YYYYMMDDTHHmmss
+  const m = s.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})$/);
+  if (!m) return null;
+  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
 }
 
 // ====================================================================

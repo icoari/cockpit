@@ -7,8 +7,18 @@ workers_dev = true
 binding = "KV"
 id = "317a9f34cb9d4c1fb377e116cbb8cbed"
 
+[vars]
+VAPID_PUBLIC_KEY = "BFAFeTqjyY9y1FTcPcWtFHfARz4hUkXCBa9iqFePsaX0MhCiHTsXlazm65CbqIbL2EBl5qRw_tRMzdueTwsXd9o"
+VAPID_SUBJECT    = "mailto:bob@icoari.dev"
+# VAPID_PRIVATE_KEY is a secret, set via:  wrangler secret put VAPID_PRIVATE_KEY
+
 [triggers]
-crons = ["*/10 * * * *"]
+crons = [
+  "*/10 * * * *",    # feed aggregation
+  "*/5 6-23 * * *",  # train + perturbations watch (every 5 min, 6h-23h)
+  "0 6 * * *",       # morning brief notification (7h local Paris = 6h UTC summer)
+  "0 21 * * *",      # health-tracker reminder (23h local = 21h UTC summer; covers the soir slot)
+]
 
 # R2 binding — uncomment after enabling R2 in the Cloudflare dashboard,
 # then run: wrangler r2 bucket create bob-photos

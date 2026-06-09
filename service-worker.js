@@ -1,4 +1,4 @@
-const CACHE = 'bob-v35';
+const CACHE = 'bob-v36';
 const ASSETS = [
   './',
   './index.html',
@@ -32,6 +32,7 @@ const ASSETS = [
   './modules/copilot.js',
   './modules/pro.js',
   './modules/digest.js',
+  './modules/notifications.js',
   './icons/icon.svg',
 ];
 
@@ -82,4 +83,46 @@ self.addEventListener('fetch', (e) => {
       return cached || fetchPromise;
     })
   );
+});
+
+// ---------- Web Push ----------
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { title: 'Bob', body: event.data ? event.data.text() : '' };
+  }
+  const title = payload.title || 'Bob';
+  const opts = {
+    body: payload.body || '',
+    tag: payload.tag || 'bob',
+    icon: './icons/icon-192.png',
+    badge: './icons/icon.svg',
+    data: { url: payload.url || '/' },
+    renotify: payload.renotify === true,
+    requireInteraction: payload.requireInteraction === true,
+  };
+  event.waitUntil(self.registration.showNotification(title, opts));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    // Focus an existing window if any
+    for (const c of all) {
+      if ('focus' in c) {
+        try {
+          await c.focus();
+          c.postMessage({ type: 'notification-clicked', url });
+          return;
+        } catch {}
+      }
+    }
+    if (self.clients.openWindow) {
+      await self.clients.openWindow(url);
+    }
+  })());
 });

@@ -3135,6 +3135,46 @@ body.theme-light .hn-item:hover { background: rgba(20, 20, 30, 0.025); }
 
 .pro2-body { display: flex; flex-direction: column; gap: 36px; }
 
+/* Day context strip — météo · agenda · trains */
+.pro2-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  background: var(--hairline);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+.pro2-context[hidden] { display: none; }
+
+.pro2-context__cell {
+  flex: 1 1 0;
+  min-width: 110px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  background: var(--bg-soft);
+}
+
+.pro2-context__label {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.pro2-context__value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .pro2-loading,
 .pro2-empty,
 .pro2-error,

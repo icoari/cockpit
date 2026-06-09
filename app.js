@@ -93,6 +93,7 @@ function initTabs() {
 
 // ---------- Widgets ----------
 const widgets = {};
+window.__bobWidgets = widgets;   // exposed so ProWidget can pull context from other widgets
 
 function mountWidgets() {
   widgets.weatherCard = new WeatherCard(document.querySelector('[data-widget="weatherCard"]'));

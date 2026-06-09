@@ -7,8 +7,9 @@ import { escapeHTML, timeAgo, haptic } from './util.js';
 import { fetchFeed, pushSources } from './feed.js';
 import { isConfigured as llmConfigured } from './llm.js';
 import { generateDigest } from './digest.js';
-import { markAiRead, isAiRead } from './state.js';
+import { markAiRead, isAiRead, getSettings } from './state.js';
 import { isSyncEnabled } from './sync.js';
+import { fetchWithTimeout } from './util.js';
 
 const DIGEST_KEY = 'bob-digest-v2';
 const STALE_AFTER_MS = 4 * 60 * 60 * 1000;   // 4 h
@@ -94,6 +95,7 @@ export class ProWidget {
           <button class="pro2-refresh" data-action="refresh" type="button" aria-label="Rafraîchir l'éditorial">${ICONS.refresh}</button>
         </div>
       </header>
+      <div class="pro2-context" data-context hidden></div>
       <div class="pro2-body" data-body></div>
     `;
   }
@@ -117,8 +119,74 @@ export class ProWidget {
     if (el) el.textContent = text;
   }
 
+  async renderDayContext() {
+    const ctx = await this.gatherDayContext();
+    this.dayContext = ctx;
+    const el = this.container.querySelector('[data-context]');
+    if (!el) return;
+    const bits = [];
+    if (ctx.weather) bits.push(`<span class="pro2-context__cell"><span class="pro2-context__label">Météo</span><span class="pro2-context__value">${escapeHTML(ctx.weather.label)} · ${ctx.weather.temp}°</span></span>`);
+    if (ctx.calendarNext) bits.push(`<span class="pro2-context__cell"><span class="pro2-context__label">Agenda</span><span class="pro2-context__value">${escapeHTML(ctx.calendarNext)}</span></span>`);
+    if (ctx.trainsNext) bits.push(`<span class="pro2-context__cell"><span class="pro2-context__label">Train</span><span class="pro2-context__value">${escapeHTML(ctx.trainsNext)}</span></span>`);
+    if (bits.length === 0) { el.hidden = true; return; }
+    el.hidden = false;
+    el.innerHTML = bits.join('');
+  }
+
+  async gatherDayContext() {
+    const out = { weather: null, calendarNext: null, trainsNext: null, calendarItems: [] };
+
+    // Weather from open-meteo if location is set
+    try {
+      const loc = getSettings().location || {};
+      if (loc.lat && loc.lon) {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,weather_code&timezone=auto`;
+        const r = await fetchWithTimeout(url, {}, 4000);
+        if (r.ok) {
+          const d = await r.json();
+          out.weather = {
+            temp: Math.round(d.current?.temperature_2m ?? 0),
+            label: weatherLabel(d.current?.weather_code ?? 0),
+          };
+        }
+      }
+    } catch {}
+
+    // Calendar: read cached events from the mounted CalendarWidget
+    try {
+      const ev = window.__bobWidgets?.calendar?.events || [];
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+      const todayEnd   = new Date(); todayEnd.setHours(23, 59, 59, 999);
+      const todays = ev
+        .map(e => ({ start: e.start?.dateTime ? new Date(e.start.dateTime) : (e.start?.date ? new Date(e.start.date) : null), title: e.summary || '' }))
+        .filter(x => x.start && x.start >= todayStart && x.start <= todayEnd)
+        .sort((a, b) => a.start - b.start);
+      out.calendarItems = todays;
+      if (todays.length > 0) {
+        const next = todays.find(x => x.start >= new Date()) || todays[0];
+        const t = next.start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        out.calendarNext = `${t} · ${next.title.slice(0, 32)}`;
+      }
+    } catch {}
+
+    // Trains: read from the TrainsWidget if cached
+    try {
+      const t = window.__bobWidgets?.trainsAller;
+      if (t?.items?.length) {
+        const first = t.items[0];
+        if (first?.depTime) {
+          const dep = new Date(first.depTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+          out.trainsNext = `${first.line || 'Prochain'} ${dep}`;
+        }
+      }
+    } catch {}
+
+    return out;
+  }
+
   async bootstrap() {
     const body = this.container.querySelector('[data-body]');
+    this.renderDayContext();
 
     if (!isSyncEnabled()) {
       body.innerHTML = `<div class="pro2-empty">Active la sauvegarde cloud (Réglages) pour activer le feed agrégé.</div>`;
@@ -233,4 +301,16 @@ export class ProWidget {
   refresh() {
     return this.bootstrap();
   }
+}
+
+function weatherLabel(code) {
+  if (code === 0 || code === 1) return 'clair';
+  if (code === 2) return 'partiel';
+  if (code === 3) return 'couvert';
+  if (code === 45 || code === 48) return 'brouillard';
+  if (code >= 51 && code <= 67) return 'pluie';
+  if (code >= 71 && code <= 86) return 'neige';
+  if (code >= 80 && code <= 82) return 'averses';
+  if (code >= 95) return 'orage';
+  return 'changeant';
 }

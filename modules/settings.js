@@ -13,6 +13,10 @@ import {
 } from './sync.js';
 import { ping as llmPing } from './llm.js';
 import { pushSources } from './feed.js';
+import {
+  supportsPush, permissionStatus, subscribePush, unsubscribePush,
+  isSubscribed, sendTestPush, pushMonitoring,
+} from './notifications.js';
 
 export class SettingsPanel {
   constructor(rootEl, onChange) {
@@ -191,6 +195,31 @@ export class SettingsPanel {
       </div>
 
       <div class="settings-section">
+        <div class="settings-section__title">Notifications</div>
+        <div class="settings-section__desc">
+          Push iOS via Web Push standard. <strong>Bob doit être ajouté à l'écran d'accueil</strong> pour que ça fonctionne sur iPhone.
+        </div>
+        <div id="pushStatus" class="settings-info" style="margin:0 0 10px;padding:8px 12px;font-size:12px">Chargement…</div>
+        <div class="btn-row" style="margin-bottom:14px">
+          <button class="btn" type="button" data-action="push-enable">Activer</button>
+          <button class="btn btn--ghost" type="button" data-action="push-test">Tester</button>
+          <button class="btn btn--danger" type="button" data-action="push-disable">Désactiver</button>
+        </div>
+        <label class="label-row" style="display:block;margin-top:6px">
+          <input type="checkbox" data-field="alertTrains" ${s.alerts?.trainAlerts !== false ? 'checked' : ''}>
+          Alertes perturbations IDFM (lignes J, RER A)
+        </label>
+        <label class="label-row" style="display:block">
+          <input type="checkbox" data-field="alertBrief" ${s.alerts?.morningBrief !== false ? 'checked' : ''}>
+          Notification du brief matinal (7h)
+        </label>
+        <label class="label-row" style="display:block">
+          <input type="checkbox" data-field="alertHealth" ${s.alerts?.healthReminder ? 'checked' : ''}>
+          Rappel Suivi santé soir (23h)
+        </label>
+      </div>
+
+      <div class="settings-section">
         <div class="settings-section__title">Sauvegarde cloud (chiffrée)</div>
         <div class="settings-section__desc">
           Sauvegarde end-to-end chiffrée sur Cloudflare. Sans la passphrase,
@@ -220,7 +249,7 @@ export class SettingsPanel {
         const v = el.type === 'checkbox' ? el.checked : el.value;
         if (!settings.llm) settings.llm = { enabled: false, endpoint: '', apiKey: '', model: '', authStyle: 'bearer' };
         switch (el.dataset.field) {
-          case 'idfmKey':            settings.idfm.apiKey = v.trim(); break;
+          case 'idfmKey':            settings.idfm.apiKey = v.trim(); pushMonitoring(); break;
           case 'calendarClientId':   settings.calendar.clientId = v.trim(); break;
           case 'calendarId':         settings.calendar.calendarId = v.trim() || 'primary'; break;
           case 'locName':            settings.location.name = v.trim(); break;
@@ -235,6 +264,9 @@ export class SettingsPanel {
           case 'llmAuthStyle':       settings.llm.authStyle = v; break;
           case 'llmFormat':          settings.llm.format = v; break;
           case 'llmEnabled':         settings.llm.enabled = !!v; break;
+          case 'alertTrains':        (settings.alerts = settings.alerts || {}).trainAlerts = !!v; pushMonitoring(); break;
+          case 'alertBrief':         (settings.alerts = settings.alerts || {}).morningBrief = !!v; pushMonitoring(); break;
+          case 'alertHealth':        (settings.alerts = settings.alerts || {}).healthReminder = !!v; pushMonitoring(); break;
         }
         save();
         this.onChange();
@@ -298,6 +330,41 @@ export class SettingsPanel {
         }
         return;
       }
+      if (action === 'push-enable') {
+        const statusEl = this.root.querySelector('#pushStatus');
+        statusEl.textContent = 'Demande en cours…';
+        try {
+          await subscribePush();
+          await pushMonitoring();
+          statusEl.textContent = '✓ Notifications activées sur cet appareil.';
+          statusEl.style.color = 'var(--accent)';
+        } catch (err) {
+          statusEl.textContent = 'Échec : ' + (err.message || err);
+          statusEl.style.color = 'var(--danger)';
+        }
+        return;
+      }
+      if (action === 'push-disable') {
+        if (!confirm('Désactiver les notifications sur cet appareil ?')) return;
+        const statusEl = this.root.querySelector('#pushStatus');
+        await unsubscribePush();
+        statusEl.textContent = 'Notifications désactivées.';
+        statusEl.style.color = '';
+        return;
+      }
+      if (action === 'push-test') {
+        const statusEl = this.root.querySelector('#pushStatus');
+        statusEl.textContent = 'Envoi du test…';
+        try {
+          await sendTestPush();
+          statusEl.textContent = '✓ Test envoyé. La notification doit apparaître d\'ici quelques secondes.';
+          statusEl.style.color = 'var(--accent)';
+        } catch (err) {
+          statusEl.textContent = 'Échec : ' + (err.message || err);
+          statusEl.style.color = 'var(--danger)';
+        }
+        return;
+      }
       if (action === 'llm-ping') {
         const statusEl = this.root.querySelector('[data-llm-status]');
         statusEl.textContent = 'Test en cours…';
@@ -348,6 +415,21 @@ export class SettingsPanel {
     });
 
     this.attachSyncHandlers();
+    this.refreshPushStatus();
+  }
+
+  async refreshPushStatus() {
+    const el = this.root.querySelector('#pushStatus');
+    if (!el) return;
+    if (!supportsPush()) {
+      el.textContent = 'Cet appareil ne supporte pas Web Push. Sur iPhone, ajoute Bob à l\'écran d\'accueil d\'abord.';
+      return;
+    }
+    const perm = permissionStatus();
+    const sub = await isSubscribed();
+    if (sub && perm === 'granted')      el.textContent = '✓ Notifications actives sur cet appareil.';
+    else if (perm === 'denied')         el.textContent = 'Permission refusée — autorise les notifications dans les réglages du navigateur.';
+    else                                el.textContent = 'Notifications inactives — clique « Activer ».';
   }
 
   // ---------- Cloud sync (end-to-end encrypted) ----------

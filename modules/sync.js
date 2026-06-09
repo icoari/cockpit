@@ -152,6 +152,43 @@ export async function pushNow(buildPayload) {
   return { updatedAt: local?.lastPushedAt || null };
 }
 
+// Pull the remote blob only if it's strictly newer than what we last
+// pushed from this device. Updates the local lastPushedAt/Hash so the
+// next check is idempotent. Used at startup + on tab focus.
+export async function pullIfNewer() {
+  if (!isSyncEnabled()) return null;
+  const local = readLocal();
+  if (!local) return null;
+  const lastPushedAt = local.lastPushedAt || 0;
+
+  let resp;
+  try {
+    resp = await fetch(`${WORKER_URL}/sync/data`, {
+      headers: { 'Authorization': `Bearer ${local.authToken}` },
+    });
+  } catch { return null; }
+  if (!resp.ok) return null;
+
+  const data = await resp.json();
+  if (!data || !data.updatedAt) return null;
+  // Skip if remote isn't meaningfully newer (avoid round-trip races).
+  if (data.updatedAt <= lastPushedAt + 1500) return null;
+
+  const dataKey = await importDataKey(local.dataKeyHex);
+  const plaintext = await decrypt(data.iv, data.ciphertext, dataKey);
+  const hash = await sha256Hex(plaintext);
+  writeLocal({ ...local, lastPushedAt: data.updatedAt, lastPushedHash: hash });
+  return { state: JSON.parse(plaintext), updatedAt: data.updatedAt };
+}
+
+// Convenience: push any unsynced local change first, then pull if remote
+// turns out to be newer. The sequence avoids clobbering pending local edits.
+export async function startupReconcile(buildPayload) {
+  if (!isSyncEnabled()) return null;
+  try { await pushNow(buildPayload); } catch {}
+  return pullIfNewer();
+}
+
 // Force-pull the remote blob (e.g. on startup or via a manual button).
 export async function pullNow() {
   if (!isSyncEnabled()) return null;

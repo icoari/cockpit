@@ -1,6 +1,7 @@
 import { ICONS } from './modules/icons.js';
 import { formatDateLong, haptic } from './modules/util.js';
-import { getSettings, updateSettings } from './modules/state.js';
+import { getSettings, updateSettings, importData, buildSyncPayload } from './modules/state.js';
+import { startupReconcile, pullIfNewer } from './modules/sync.js';
 import { renderHeaderWeather } from './modules/weather.js';
 import { TrainsWidget } from './modules/trains.js';
 import { LastTrainWidget } from './modules/lastTrain.js';
@@ -471,6 +472,35 @@ initProjects();
 // Keep the Worker's monitoring config in sync with the current settings
 // (IDFM key, alert toggles, stop coords). Fire-and-forget on startup.
 pushMonitoring();
+
+// Auto-reconcile with the cloud — push any pending local edits, then pull
+// if the remote blob is strictly newer than what we last sent. Re-checks
+// every time the tab regains focus (throttled to once per minute).
+let lastPullAt = 0;
+async function reconcileNow() {
+  if (Date.now() - lastPullAt < 60_000) return;
+  lastPullAt = Date.now();
+  try {
+    const result = await pullIfNewer();
+    if (result?.state) {
+      importData(JSON.stringify(result.state));
+      location.reload();
+    }
+  } catch {}
+}
+(async () => {
+  try {
+    const result = await startupReconcile(buildSyncPayload);
+    if (result?.state) {
+      importData(JSON.stringify(result.state));
+      location.reload();
+    }
+  } catch {}
+})();
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) reconcileNow();
+});
+window.addEventListener('focus', reconcileNow);
 
 // ---------- Service worker registration (moved from inline script for CSP) ----------
 if ('serviceWorker' in navigator) {

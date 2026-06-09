@@ -61,6 +61,7 @@ function setActiveTab(name) {
   document.getElementById('pageSection').textContent = TAB_LABELS[name] || '';
   updateSettings({ activeTab: name });
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (name === 'projets') refreshProjectStats();
 }
 
 function initTabs() {
@@ -334,6 +335,57 @@ function initProjects() {
       openProject(card.dataset.project);
     }
   });
+  refreshProjectStats();
+  // Refresh stats every time the Projets tab becomes active.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) refreshProjectStats();
+  });
+}
+
+function refreshProjectStats() {
+  const setStat = (key, label, value) => {
+    const el = document.querySelector(`[data-project-stat="${key}"]`);
+    if (!el) return;
+    if (value === null || value === undefined) {
+      el.textContent = label;
+      return;
+    }
+    el.innerHTML = `${label} <span class="projet-card__stat-value">${value}</span>`;
+  };
+
+  // Suivi santé — read entries, compute filled-days / total + last entry age
+  try {
+    const raw = localStorage.getItem('health-tracker-v1');
+    const data = raw ? JSON.parse(raw) : null;
+    const entries = data?.entries || {};
+    const days = Object.keys(entries);
+    const totalSlots = days.reduce((sum, d) => sum + Object.keys(entries[d] || {}).length, 0);
+    if (days.length === 0) {
+      setStat('health', 'Aucune entrée', null);
+    } else {
+      const startDate = new Date(data?.startDate || '2026-05-14');
+      const today = new Date(); today.setHours(0,0,0,0);
+      const dayN = Math.max(1, Math.floor((today - startDate) / 86400000) + 1);
+      const totalPeriod = 31;
+      setStat('health', `Jour ${Math.min(dayN, totalPeriod)} / ${totalPeriod}`, `${totalSlots} entrées`);
+    }
+  } catch { setStat('health', 'Aucune entrée', null); }
+
+  // Écrire — chapter count + total word count
+  try {
+    const raw = localStorage.getItem('bob-writer-v1');
+    const data = raw ? JSON.parse(raw) : null;
+    const chapters = data?.chapters || [];
+    if (chapters.length === 0) {
+      setStat('writer', 'Aucun chapitre', null);
+    } else {
+      const totalWords = chapters.reduce((s, c) => s + (c.content || '').trim().split(/\s+/).filter(Boolean).length, 0);
+      const formatted = totalWords >= 1000 ? (totalWords / 1000).toFixed(1).replace('.0', '') + 'k mots' : `${totalWords} mots`;
+      setStat('writer', `${chapters.length} chapitre${chapters.length > 1 ? 's' : ''}`, formatted);
+    }
+  } catch { setStat('writer', 'Aucun chapitre', null); }
+
+  // BEIUE is a launcher — no live stats
 }
 
 // ---------- Health insights panel (lives inside the Suivi santé project shell) ----------

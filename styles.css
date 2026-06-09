@@ -209,15 +209,161 @@ button {
 
 .pane[hidden] { display: none; }
 
-/* Trains pane — order the widgets by proximity (defaults to "aller" first
-   = morning use case). When the user's location is clearly Paris, retour
-   gets surfaced first. */
+/* Trains pane — diagram on top, widgets ordered by proximity below
+   (defaults to "aller" first = morning use case). When the user's
+   location is clearly Paris, retour gets surfaced first. */
+.pane[data-pane="trains"] [data-route-diagram]         { order: 0; }
 .pane[data-pane="trains"] [data-widget="trains-aller"]  { order: 1; }
 .pane[data-pane="trains"] [data-widget="trains-retour"] { order: 2; }
 .pane[data-pane="trains"] [data-widget="last-train"]    { order: 3; }
 
 body.loc-paris .pane[data-pane="trains"] [data-widget="trains-aller"]  { order: 2; }
 body.loc-paris .pane[data-pane="trains"] [data-widget="trains-retour"] { order: 1; }
+
+/* Hero route diagram — Conflans ⇆ Paris */
+.route-diagram {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 18px;
+  align-items: center;
+  padding: 18px 20px 20px;
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(127, 209, 185, 0.10), transparent 55%),
+    radial-gradient(120% 100% at 100% 100%, rgba(146, 132, 220, 0.08), transparent 55%),
+    var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--elev-1);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  position: relative;
+  overflow: hidden;
+}
+
+.route-diagram::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 18px; right: 18px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+  pointer-events: none;
+}
+body.theme-light .route-diagram::before {
+  background: linear-gradient(90deg, transparent, rgba(20, 20, 30, 0.10), transparent);
+}
+
+.route-diagram__endpoint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 64px;
+}
+
+.route-diagram__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+}
+.route-diagram__icon svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.6;
+}
+.route-diagram__icon--home {
+  background: rgba(127, 209, 185, 0.15);
+  border-color: rgba(127, 209, 185, 0.32);
+  color: var(--accent);
+}
+.route-diagram__icon--city {
+  background: rgba(146, 132, 220, 0.15);
+  border-color: rgba(146, 132, 220, 0.32);
+  color: #B0A4F0;
+}
+body.theme-light .route-diagram__icon--city {
+  background: rgba(99, 81, 196, 0.12);
+  border-color: rgba(99, 81, 196, 0.28);
+  color: #6351C4;
+}
+
+.route-diagram__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.route-diagram__track {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 0;
+  min-height: 44px;
+}
+
+.route-diagram__svg {
+  width: 100%;
+  height: 18px;
+  display: block;
+}
+.route-diagram__svg line {
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-dasharray: 3 5;
+}
+.route-diagram__svg circle {
+  fill: var(--text-mute);
+}
+
+.route-diagram__pulse {
+  position: absolute;
+  top: 15px;
+  left: 6%;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 5px var(--accent-soft);
+  animation: route-pulse 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes route-pulse {
+  0%   { left: 6%;  opacity: 0; }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { left: 94%; opacity: 0; }
+}
+
+body.loc-paris .route-diagram__pulse {
+  animation-direction: reverse;
+}
+
+.route-diagram__lines {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+@media (max-width: 360px) {
+  .route-diagram { padding: 16px 14px 18px; gap: 12px; }
+  .route-diagram__endpoint { min-width: 56px; }
+  .route-diagram__icon { width: 40px; height: 40px; }
+  .route-diagram__lines { letter-spacing: 0.08em; }
+}
 
 /* ============================================================
    Sub-tabs (used inside the Pro pane)

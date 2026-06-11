@@ -135,11 +135,18 @@ export async function pushMonitoring() {
     home:    { lat: 48.991156,  lon: 2.074643  },  // Conflans Fin d'Oise
     homeAlt: { lat: 48.996915,  lon: 2.098717  },  // Conflans-Sainte-Honorine
   };
+  // The Worker queries the Navitia disruptions endpoint, which only accepts
+  // the navitia id format (line:IDFM:Cxxxxx) — NOT the SIRI one stored in
+  // settings (STIF:Line::Cxxxxx:).
+  const toNavitia = (siri) => {
+    const m = (siri || '').match(/C\d{5}/);
+    return m ? `line:IDFM:${m[0]}` : null;
+  };
   const body = {
     idfmKey: s.idfm?.apiKey || '',
     idfmLines: [
-      s.idfm?.lines?.transilienJ,
-      s.idfm?.lines?.rerA,
+      toNavitia(s.idfm?.lines?.transilienJ),
+      toNavitia(s.idfm?.lines?.rerA),
     ].filter(Boolean),
     stops,
     alerts: {

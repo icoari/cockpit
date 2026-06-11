@@ -40,6 +40,17 @@ function n152StartTime() {
   return t;
 }
 
+// Last-train probes must start late in the evening: querying 50 journeys
+// from 14h on a frequent line ends mid-evening and the 50th journey gets
+// mislabelled as the "last" one. From 21h, 50 journeys always reach the
+// real end of service.
+function lastTrainStartTime() {
+  const t = new Date();
+  if (t.getHours() >= 21 || t.getHours() < 4) return t;   // evening/night: live
+  t.setHours(21, 0, 0, 0);
+  return t;
+}
+
 async function fetchJourney(apiKey, fromLat, fromLon, toLat, toLon, lineId, opts = {}) {
   const { count = 50, datetime } = opts;
   const url = `https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia/journeys`
@@ -95,12 +106,15 @@ async function loadAll(apiKey) {
     return {
       lastJFdo: cached.lastJFdo && hydrate(cached.lastJFdo),
       lastJSh:  cached.lastJSh  && hydrate(cached.lastJSh),
-      lastRer:  cached.lastRer  && { ...hydrate(cached.lastRer.summary), fromStation: cached.lastRer.fromStation },
+      // Same shape as the fresh path: { summary, fromStation } — flattening
+      // here made d.lastRer.summary undefined on every cache hit and the
+      // RER row showed « Service indisponible ».
+      lastRer:  cached.lastRer  && { summary: hydrate(cached.lastRer.summary), fromStation: cached.lastRer.fromStation },
       nextN152: (cached.nextN152 || []).map(hydrate),
     };
   }
 
-  const nowDt = navitiaDt(new Date());
+  const lastDt = navitiaDt(lastTrainStartTime());
   const n152Dt = navitiaDt(n152StartTime());
 
   // RER A: from nearest Paris station to Conflans Fin d'Oise
@@ -119,15 +133,15 @@ async function loadAll(apiKey) {
   // from 22:30 so we always hit tonight's schedule even during the day.
   const fetchRer = () => fetchJourney(apiKey, rerStation.lat, rerStation.lon,
                  COORDS.conflansFinDOise.lat, COORDS.conflansFinDOise.lon,
-                 LINES.RER_A, { count: 50, datetime: nowDt });
+                 LINES.RER_A, { count: 50, datetime: lastDt });
 
   const [jFdoList, jShList, rerList, n152List] = await Promise.all([
     fetchJourney(apiKey, COORDS.saintLazare.lat, COORDS.saintLazare.lon,
                  COORDS.conflansFinDOise.lat, COORDS.conflansFinDOise.lon,
-                 LINES.J, { count: 50, datetime: nowDt }),
+                 LINES.J, { count: 50, datetime: lastDt }),
     fetchJourney(apiKey, COORDS.saintLazare.lat, COORDS.saintLazare.lon,
                  COORDS.conflansSainteHonorine.lat, COORDS.conflansSainteHonorine.lon,
-                 LINES.J, { count: 50, datetime: nowDt }),
+                 LINES.J, { count: 50, datetime: lastDt }),
     fetchRer(),
     fetchJourney(apiKey, COORDS.saintLazare.lat, COORDS.saintLazare.lon,
                  COORDS.conflansFinDOise.lat, COORDS.conflansFinDOise.lon,

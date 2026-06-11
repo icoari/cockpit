@@ -63,6 +63,9 @@ export function extractDepartures(siri) {
     };
   })
   .filter(d => d.expected)
+  // Drop trains that left more than a minute ago — SIRI keeps them in the
+  // response for a while and they'd crowd out upcoming departures.
+  .filter(d => d.expected.getTime() > Date.now() - 60_000)
   .sort((a, b) => a.expected - b.expected);
 }
 
@@ -103,8 +106,9 @@ function jBranch(dest) {
 export function isConflansBoundFromParisRER(dep) {
   if (dep.lineRef !== 'STIF:Line::C01742:') return false;
   const dest = (dep.destination || '').toLowerCase();
-  // RER A trains to Conflans Fin d'Oise are only those bound for Cergy le Haut
-  return dest.includes('cergy');
+  // Cergy-le-Haut trains pass through Conflans Fin d'Oise; short turns can
+  // terminate at Conflans itself.
+  return dest.includes('cergy') || dest.includes('conflans');
 }
 
 // ---------- Rendering helpers ----------

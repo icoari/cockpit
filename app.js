@@ -266,11 +266,12 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('focus', refreshLiveData);
 
-// Live train auto-refresh every 90 s
+// Live train auto-refresh — force fresh SIRI data so the displayed
+// minute counts never run on a stale 60 s cache.
 setInterval(() => {
   if (!document.hidden) {
-    try { widgets.trainsAller?.refresh(); } catch {}
-    try { widgets.trainsRetour?.refresh(); } catch {}
+    try { widgets.trainsAller?.refresh(true); } catch {}
+    try { widgets.trainsRetour?.refresh(true); } catch {}
   }
 }, 60 * 1000);
 

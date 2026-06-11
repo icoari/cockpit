@@ -428,7 +428,18 @@ async function getSubscription(env) {
 
 async function getMonitoring(env) {
   const raw = await env.KV.get(KEY_MONITORING);
-  return raw ? JSON.parse(raw) : {};
+  const mon = raw ? JSON.parse(raw) : {};
+  // Normalise line ids to the navitia format — older clients pushed the
+  // SIRI format (STIF:Line::Cxxxxx:) which 404s on /lines/{id}/disruptions.
+  if (Array.isArray(mon.idfmLines)) {
+    mon.idfmLines = mon.idfmLines
+      .map(id => {
+        const m = (id || '').match(/C\d{5}/);
+        return m ? `line:IDFM:${m[0]}` : null;
+      })
+      .filter(Boolean);
+  }
+  return mon;
 }
 
 async function pushOne(env, payload, opts = {}) {
@@ -523,7 +534,7 @@ async function checkDisruptions(env) {
         stillActive.add(d.id);
         if (alerted.has(d.id)) continue;
         const summary = compactDisruptionText(d);
-        newAlerts.push({ id: d.id, line: lineMnemonic(lineId), summary });
+        newAlerts.push({ id: d.id, line: lineMnemonic(lineId), summary, rank: severityRank(d) });
       }
     } catch (e) {
       anyLineFailed = true;
@@ -531,7 +542,10 @@ async function checkDisruptions(env) {
     }
   }
 
-  // Send one push per new alert (max 3 per cycle to avoid spam).
+  // Send one push per new alert — max 3 per cycle, the most severe first.
+  // The rest are still persisted as "seen" so a backlog of minor
+  // disruptions can never flood the user.
+  newAlerts.sort((a, b) => a.rank - b.rank);
   for (const a of newAlerts.slice(0, 3)) {
     await pushOne(env, {
       title: `${a.line} · perturbation`,
@@ -554,6 +568,16 @@ async function checkDisruptions(env) {
   if (JSON.stringify(persist) !== JSON.stringify(previous)) {
     await env.KV.put(KEY_ALERTED_DISRUPTIONS, JSON.stringify(persist));
   }
+}
+
+// Lower = more severe = pushed first when several disruptions are new.
+function severityRank(d) {
+  const effect = (d.severity?.effect || '').toUpperCase();
+  if (effect === 'NO_SERVICE') return 0;
+  if (effect === 'REDUCED_SERVICE') return 1;
+  if (effect === 'SIGNIFICANT_DELAYS') return 2;
+  if (effect === 'DETOUR' || effect === 'MODIFIED_SERVICE') return 3;
+  return 4;
 }
 
 function lineMnemonic(lineId) {

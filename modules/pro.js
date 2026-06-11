@@ -110,7 +110,10 @@ export class ProWidget {
         return;
       }
       const card = e.target.closest('[data-url]');
-      if (card) markAiRead(card.dataset.url);
+      if (card) {
+        markAiRead(card.dataset.url);
+        card.classList.add(card.classList.contains('pro2-headline') ? 'pro2-headline--read' : 'pro2-later__item--read');
+      }
     });
   }
 
@@ -121,7 +124,6 @@ export class ProWidget {
 
   async renderDayContext() {
     const ctx = await this.gatherDayContext();
-    this.dayContext = ctx;
     const el = this.container.querySelector('[data-context]');
     if (!el) return;
     const bits = [];

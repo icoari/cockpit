@@ -164,15 +164,3 @@ export async function pushMonitoring() {
     });
   } catch { /* will retry on next push */ }
 }
-
-export async function pingHealth(date, slot) {
-  const auth = authedHeaders();
-  if (!auth) return;
-  try {
-    await fetch(`${WORKER_URL}/health/ping`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...auth },
-      body: JSON.stringify({ date, slot }),
-    });
-  } catch {}
-}

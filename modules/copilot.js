@@ -50,25 +50,6 @@ ${target}
   }
 }
 
-export async function runCopilot(task, params) {
-  if (task === 'question') {
-    return complete(
-      [
-        { role: 'system', content: SYSTEM_QUESTION },
-        { role: 'user', content: `Contexte récent :\n${(params.context || '').slice(-1500)}\n\nPose-moi la question.` },
-      ],
-      { temperature: 0.7, maxTokens: 200 },
-    );
-  }
-  return complete(
-    [
-      { role: 'system', content: SYSTEM_WRITER },
-      { role: 'user', content: buildUser(task, params) },
-    ],
-    { temperature: 0.6, maxTokens: 800 },
-  );
-}
-
 export async function streamCopilot(task, params, onChunk) {
   if (task === 'question') {
     return stream(

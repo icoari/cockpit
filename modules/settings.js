@@ -9,7 +9,7 @@ import { ENCOMBRANTS_PATTERNS } from './bins.js';
 import { escapeHTML } from './util.js';
 import {
   isSyncEnabled, getSyncMeta, setupSync, unlockSync,
-  disableSyncLocally, wipeRemote, pullNow, pushNow, schedulePush,
+  disableSyncLocally, wipeRemote, pullNow, pushNow, schedulePush, WORKER_URL,
 } from './sync.js';
 import { ping as llmPing } from './llm.js';
 import { pushSources } from './feed.js';
@@ -269,7 +269,7 @@ export class SettingsPanel {
       if (!el) return;
         const settings = getSettings();
         const v = el.type === 'checkbox' ? el.checked : el.value;
-        if (!settings.llm) settings.llm = { enabled: false, endpoint: '', apiKey: '', model: '', authStyle: 'bearer' };
+        if (!settings.llm) settings.llm = { enabled: false, endpoint: '', apiKey: '', model: '', authStyle: 'bearer', format: 'openai' };
         switch (el.dataset.field) {
           case 'idfmKey':            settings.idfm.apiKey = v.trim(); pushMonitoring(); break;
           case 'calendarClientId':   settings.calendar.clientId = v.trim(); break;
@@ -399,8 +399,8 @@ export class SettingsPanel {
           await pushMonitoring();
           const auth = { 'Authorization': 'Bearer ' + (JSON.parse(localStorage.getItem('bob-sync-v1') || '{}').authToken || '') };
           const [r1, r2] = await Promise.all([
-            fetch('https://bob.jz7w76ry59.workers.dev/cron/run?task=last-trains', { method: 'POST', headers: auth }),
-            fetch('https://bob.jz7w76ry59.workers.dev/cron/run?task=disruptions', { method: 'POST', headers: auth }),
+            fetch(`${WORKER_URL}/cron/run?task=last-trains`, { method: 'POST', headers: auth }),
+            fetch(`${WORKER_URL}/cron/run?task=disruptions`, { method: 'POST', headers: auth }),
           ]);
           if (r1.ok && r2.ok) {
             statusEl.textContent = '✓ Vérifié. S\'il y a quelque chose à signaler, une notif arrive.';

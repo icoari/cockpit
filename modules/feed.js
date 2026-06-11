@@ -3,7 +3,7 @@
 // cron knows what to fetch on this user's behalf.
 
 import { WORKER_URL } from './sync.js';
-import { getSettings, cacheGet, cacheSet, cacheBust } from './state.js';
+import { getSettings, cacheGet, cacheSet } from './state.js';
 
 const FEED_CACHE_TTL = 60_000;
 
@@ -54,8 +54,4 @@ export async function fetchFeed({ force = false } = {}) {
   const data = await resp.json();
   cacheSet('feed_agg', data);
   return data;
-}
-
-export function clearFeedCache() {
-  cacheBust('feed_agg');
 }

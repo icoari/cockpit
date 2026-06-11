@@ -15,6 +15,7 @@ async function fetchAir() {
   const resp = await fetchWithTimeout(url, {}, 6000);
   if (!resp.ok) throw new Error(`Air : HTTP ${resp.status}`);
   const data = await resp.json();
+  if (data.current?.european_aqi == null) throw new Error('AQI momentanément indisponible');
   cacheSet('air', data);
   return data;
 }

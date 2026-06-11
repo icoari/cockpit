@@ -61,7 +61,7 @@ function computeCorrelations(entries) {
 
   for (const d of Object.keys(entries).sort()) {
     for (const s of slots) {
-      const e = entries[d][s];
+      const e = (entries[d] || {})[s];
       if (!e) continue;
       events.push({
         date: d, slot: s,
@@ -191,7 +191,7 @@ function summaryStats(entries) {
   for (const d of Object.keys(entries)) {
     const bucket = d <= TREAT_END ? phases.traitement : phases.apres;
     for (const s of slots) {
-      const e = entries[d][s];
+      const e = (entries[d] || {})[s];
       if (!e) continue;
       bucket.total += e.note; bucket.count++;
       if (e.cachet) bucket.cachetN++;

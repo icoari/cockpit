@@ -1,4 +1,4 @@
-import { getSettings, cacheGet, cacheSet, cacheBust } from './state.js';
+import { getSettings, cacheGet, cacheSet } from './state.js';
 import { ICONS } from './icons.js';
 import { escapeHTML, fetchWithTimeout, minutesUntil, haptic } from './util.js';
 import { getPosition, distanceKm } from './geolocation.js';
@@ -188,7 +188,7 @@ export class TrainsWidget {
   constructor(container, direction) {
     this.container = container;
     this.direction = direction; // 'aller' | 'retour'
-    this.subtab = direction === 'aller' ? 'rer' : 'rer'; // default both to RER (user's primary)
+    this.subtab = 'rer'; // both directions default to the RER
     this.lastSummary = '';
     this.container.classList.add('card');
     this.render();

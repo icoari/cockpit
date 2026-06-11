@@ -4,7 +4,7 @@
 
 import { ICONS } from './icons.js';
 import { escapeHTML, fetchWithTimeout, timeAgo, haptic, safeUrl } from './util.js';
-import { getSettings, getState } from './state.js';
+import { getSettings, getState, cacheGet, cacheSet } from './state.js';
 import { isConfigured as llmConfigured, complete } from './llm.js';
 
 const GREETING_KEY = 'bob-home-greeting-v1';
@@ -39,6 +39,8 @@ function weatherLabelFromCode(c) {
 }
 
 async function fetchWeather() {
+  const cached = cacheGet('home_weather', 30 * 60 * 1000);
+  if (cached) return cached;
   const loc = getSettings().location || {};
   if (!loc.lat || !loc.lon) return null;
   try {
@@ -48,10 +50,12 @@ async function fetchWeather() {
     );
     if (!r.ok) return null;
     const d = await r.json();
-    return {
+    const out = {
       temp: Math.round(d.current?.temperature_2m ?? 0),
       code: d.current?.weather_code ?? 0,
     };
+    cacheSet('home_weather', out);
+    return out;
   } catch { return null; }
 }
 

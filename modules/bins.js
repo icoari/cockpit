@@ -66,7 +66,7 @@ const PATTERNS = {
   'disabled':         { label: 'Désactivé',                 next: () => [] },
 };
 
-export const COLLECTE_PATTERNS = PATTERNS;
+const COLLECTE_PATTERNS = PATTERNS;
 export const ENCOMBRANTS_PATTERNS = Object.fromEntries(
   ['monthly-2nd-tuesday', 'monthly-1st-thursday-quarter', 'monthly-3rd-thursday-quarter', 'manual']
     .map(k => [k, PATTERNS[k]])
@@ -144,9 +144,12 @@ export class BinsWidget {
 
     // Headline: next encombrants for the subtitle
     const nextEnc = nextOfType('encombrants');
-    const subtitle = nextEnc
-      ? `prochain encombrant ${shortDate(nextEnc)} · dans ${daysUntil(nextEnc)} j`
-      : 'aucune collecte';
+    let subtitle = 'aucune collecte';
+    if (nextEnc) {
+      const dEnc = daysUntil(nextEnc);
+      const when = dEnc === 0 ? "aujourd'hui" : dEnc === 1 ? 'demain' : `dans ${dEnc} j`;
+      subtitle = `prochain encombrant ${shortDate(nextEnc)} · ${when}`;
+    }
 
     this.container.innerHTML = `
       <div class="card__head">

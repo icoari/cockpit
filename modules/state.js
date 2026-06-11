@@ -110,7 +110,6 @@ const DEFAULT_STATE = {
   version: 3,
   settings: DEFAULT_SETTINGS,
   aiRead: {},
-  feedSearch: {},   // { ai: '...', tech: '...' }
   cache: {},
 };
 
@@ -122,7 +121,11 @@ function load() {
     const old = localStorage.getItem('cockpit-v2') || localStorage.getItem('cockpit-v1');
     if (old) {
       const parsed = safeJSON(old, null);
-      if (parsed) return migrate(mergeDeep(structuredClone(DEFAULT_STATE), parsed));
+      if (parsed) {
+        const migrated = migrate(mergeDeep(structuredClone(DEFAULT_STATE), parsed));
+        try { localStorage.removeItem('cockpit-v2'); localStorage.removeItem('cockpit-v1'); } catch {}
+        return migrated;
+      }
     }
     return structuredClone(DEFAULT_STATE);
   }
@@ -199,10 +202,7 @@ export function buildSyncPayload() {
   if (snapshot.settings?.calendar) snapshot.settings.calendar.token = null;
   delete snapshot.cache;
   delete snapshot.feedSearch;
-  if (snapshot.settings) {
-    delete snapshot.settings.activeTab;
-    delete snapshot.settings.proSubtab;
-  }
+  if (snapshot.settings) delete snapshot.settings.activeTab;
   return JSON.stringify({
     ...snapshot,
     _writer: readLocalJSON(WRITER_KEY),
@@ -218,12 +218,6 @@ export function updateSettings(patch) {
 // AI watch
 export function markAiRead(url) { state.aiRead[url] = true; save(); }
 export function isAiRead(url) { return !!state.aiRead[url]; }
-export function setFeedSearch(category, q) {
-  if (!state.feedSearch) state.feedSearch = {};
-  state.feedSearch[category] = q || '';
-  save();
-}
-export function getFeedSearch(category) { return state.feedSearch?.[category] || ''; }
 
 // AI sources CRUD
 export function addAiSource(name, url, lang = 'en') {

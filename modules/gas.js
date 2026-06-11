@@ -92,11 +92,6 @@ export class GasWidget {
     });
   }
 
-  cacheKey() {
-    const s = getSettings();
-    return `gas_${s.location.lat}_${s.location.lon}_${s.gas.radiusKm}`;
-  }
-
   setSubtitle(text) {
     this.lastSummary = text;
     const el = this.container.querySelector('.card__subtitle');

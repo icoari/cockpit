@@ -1,4 +1,4 @@
-const CACHE = 'bob-v55';
+const CACHE = 'bob-v56';
 const ASSETS = [
   './',
   './index.html',
@@ -9,7 +9,6 @@ const ASSETS = [
   './modules/util.js',
   './modules/state.js',
   './modules/geolocation.js',
-  './modules/weather.js',
   './modules/weatherCard.js',
   './modules/airquality.js',
   './modules/gas.js',

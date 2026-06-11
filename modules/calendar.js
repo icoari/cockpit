@@ -143,7 +143,6 @@ const toIso = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getD
 function isSameDay(a, b) { return a.toDateString() === b.toDateString(); }
 
 function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
-function endOfMonth(d) { return new Date(d.getFullYear(), d.getMonth() + 1, 0); }
 
 function buildMonthGrid(year, month) {
   // First day of month, then back up to previous Monday.

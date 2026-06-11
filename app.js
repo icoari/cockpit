@@ -162,7 +162,7 @@ function initSwipeNavigation() {
   // a swipe becomes a swipe (dx grows).
   const isSwipeBlocker = (el) => {
     if (!el) return false;
-    return !!el.closest('input, textarea, select, [data-no-swipe], .modal-backdrop');
+    return !!el.closest('input, textarea, select, [data-no-swipe]');
   };
 
   document.addEventListener('touchstart', (e) => {

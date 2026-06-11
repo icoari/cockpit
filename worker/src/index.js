@@ -535,8 +535,9 @@ async function checkDisruptions(env) {
         if (!isImpactful(d)) continue;
         const ends = (d.application_periods || []).map(p => parseNavitiaDate(p.end)).filter(Boolean);
         if (ends.length && ends.every(t => t < now)) continue;
-        stillActive.add(d.id);
-        if (alerted.has(d.id)) continue;
+        // Track for expiry-pruning only the ids we already notified; new ones
+        // join the persisted set after a SUCCESSFUL push (or as backlog).
+        if (alerted.has(d.id)) { stillActive.add(d.id); continue; }
         const summary = compactDisruptionText(d);
         newAlerts.push({ id: d.id, line: lineMnemonic(lineId), summary, rank: severityRank(d) });
       }
@@ -555,15 +556,22 @@ async function checkDisruptions(env) {
   // The rest are still persisted as "seen" so a backlog of minor
   // disruptions can never flood the user.
   newAlerts.sort((a, b) => a.rank - b.rank);
+  let anyPushFailed = false;
   for (const a of newAlerts.slice(0, 3)) {
-    await pushOne(env, {
+    const ok = await pushOne(env, {
       title: `${a.line} · perturbation`,
       body: a.summary.slice(0, 180),
       tag: `bob-disr-${a.id}`,
       url: '/?goto=trains',
     }, { urgency: 'high', ttl: 6 * 3600 });
-    alerted.add(a.id);
-    stillActive.add(a.id);
+    if (ok) { alerted.add(a.id); stillActive.add(a.id); }
+    else anyPushFailed = true;
+  }
+  // The un-pushed remainder (beyond the 3-cap) is swallowed as seen so a
+  // backlog of minor disruptions can never trickle-spam over cycles —
+  // unless a delivery failed, in which case we retry everything next cycle.
+  if (!anyPushFailed) {
+    for (const a of newAlerts.slice(3)) { alerted.add(a.id); stillActive.add(a.id); }
   }
 
   // Persist the active set so each disruption alerts exactly once. When a
@@ -686,10 +694,11 @@ async function checkLastTrainsTonight(env) {
   for (let i = 0; i < probes.length; i++) {
     const r = results[i];
     if (r === false) continue;   // transient API failure — skip, don't false-alert
-    if (!r || !r.departMs) {
+    if (r === null) {
       findings.push({ probe: probes[i], type: 'none', text: 'aucun départ trouvé ce soir' });
       continue;
     }
+    if (!r.departMs) continue;   // parse glitch on an existing journey — skip
     // Compare in Paris local time — the Worker clock is UTC.
     const { h, m } = parisHourMin(r.departMs);
     const minOfDay = h * 60 + m;
@@ -741,10 +750,7 @@ async function lastJourneyTonight(apiKey, probe, dt) {
   const journeys = data.journeys || [];
   if (journeys.length === 0) return null;
   const last = journeys[journeys.length - 1];
-  return {
-    departMs: parseNavitiaDate(last.departure_date_time),
-    arriveMs: parseNavitiaDate(last.arrival_date_time),
-  };
+  return { departMs: parseNavitiaDate(last.departure_date_time) };
 }
 
 // "YYYYMMDDTHHmmss" for a given Paris local hour today
@@ -864,6 +870,9 @@ async function aggregateFeed(env) {
     seen.add(key);
     return true;
   });
+
+  // Normalise unparseable dates so staleness filtering and sorting hold.
+  for (const it of items) if (!Number.isFinite(it.date)) it.date = 0;
 
   // Filter junk + stale
   const cutoff = Date.now() - FEED_MAX_AGE_DAYS * 86400 * 1000;

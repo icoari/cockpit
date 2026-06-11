@@ -62,7 +62,6 @@ function buildBody(c, messages, opts) {
   };
   if (opts.stream) body.stream = true;
   if (c.model) body.model = c.model;
-  if (opts.json) body.response_format = { type: 'json_object' };
   return body;
 }
 

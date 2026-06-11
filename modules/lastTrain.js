@@ -19,11 +19,6 @@ const LINES = {
   N152: 'line:IDFM:C01641',
 };
 
-const PARIS_RER_A_FROM_COORDS = {
-  Auber:                'STIF:StopArea:SP:45873:',
-  ChâteletLesHalles:    'STIF:StopArea:SP:45102:',
-};
-
 // Format date as YYYYMMDDTHHmmss (Navitia format)
 function navitiaDt(d) {
   const pad = (n) => String(n).padStart(2, '0');

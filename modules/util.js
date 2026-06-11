@@ -1,35 +1,7 @@
 // Date / time helpers
-export function dateKey(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-export function todayKey() {
-  return dateKey(new Date());
-}
-
-export function addDays(d, n) {
-  const r = new Date(d);
-  r.setDate(r.getDate() + n);
-  return r;
-}
-
-export function parseKey(key) {
-  const [y, m, d] = key.split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
-
 export function formatDateLong(d) {
   return new Intl.DateTimeFormat('fr-FR', {
     weekday: 'long', day: 'numeric', month: 'long',
-  }).format(d);
-}
-
-export function formatTime(d) {
-  return new Intl.DateTimeFormat('fr-FR', {
-    hour: '2-digit', minute: '2-digit',
   }).format(d);
 }
 

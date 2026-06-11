@@ -114,11 +114,6 @@ export function schedulePush(buildPayload) {
   pushTimer = setTimeout(runPush, PUSH_DEBOUNCE_MS);
 }
 
-// True when an edit is waiting in the debounce window or being sent.
-export function hasPendingPush() {
-  return !!(pushPending || pushInFlight);
-}
-
 async function runPush() {
   // Serialize pushes — two interleaved POSTs can persist lastPushedAt out
   // of order and make pullIfNewer re-pull our own blob.

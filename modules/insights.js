@@ -6,7 +6,15 @@
 import { stream } from './llm.js';
 
 const SYSTEM = `Tu analyses le journal de santé digestive de Nicolas (douleurs de ventre, troubles intestinaux, crises de diarrhée).
-Phase 1 : traitement du 14/05 au 13/06/2026. Ensuite : suivi continu post-traitement.
+Phase 1 : traitement du 14/05 au 13/06/2026 (Débridat/trimébutine 3×/j). Ensuite : suivi continu post-traitement.
+
+CONTEXTE CLINIQUE (rapporté par le patient, examens normaux : sang, écho, coloscopie)
+- Depuis 2 ans : crises de diarrhée post-prandiales, typiquement PENDANT ou < 30 min après le repas, précédées d'un « coup de chaud » (prodrome vagal). Tableau compatible avec un réflexe gastro-colique exagéré.
+- Le déclencheur dominant semble être la QUANTITÉ mangée (repas copieux), pas la qualité.
+- Transit de base chaotique : parfois 3 selles/jour, parfois aucune. Le risque de crise augmente le lendemain d'un jour sans selle (cycle rétention → vidange massive).
+- Expérience naturelle ON/OFF/ON : amandes effilées quotidiennes → amélioration nette ; arrêt (médicament poursuivi) → détérioration ; reprise → ré-amélioration. Hypothèse : fibres insolubles + prébiotiques régularisent le transit et cassent le cycle rétention→crise.
+- Lopéramide efficace en traitement de crise.
+Ton rôle : confronter ces hypothèses aux données chiffrées, sans complaisance — confirme, infirme ou nuance.
 
 Chaque créneau (matin/midi/soir) peut contenir : note globale 1-5 (5 = au mieux), cachet pris, crise 1-5 + heure, douleur ventre 1-5, transit sur l'échelle de Bristol (1-7, 3-4 = normal, 6-7 = diarrhée), stress 1-5, tags repas (Gras, Épicé, Lactose…), commentaire libre.
 
@@ -35,6 +43,7 @@ function summarizeEntries(entries) {
       if (e.douleur > 0) bit += ` dlr${e.douleur}`;
       if (e.transit > 0) bit += ` B${e.transit}`;
       if (e.stress > 0) bit += ` str${e.stress}`;
+      if (e.repas) bit += ` rep:${e.repas}`;
       if (Array.isArray(e.tags) && e.tags.length) bit += ` [${e.tags.join(',')}]`;
       if (e.notes) bit += ` "${e.notes.replace(/"/g, "'").slice(0, 70)}"`;
       bits.push(bit);
@@ -62,6 +71,7 @@ function computeCorrelations(entries) {
         transit: e.transit || 0,
         stress: e.stress || 0,
         tags: Array.isArray(e.tags) ? e.tags : [],
+        repas: e.repas || '',
         note: e.note,
         cachet: !!e.cachet,
       });
@@ -105,8 +115,56 @@ function computeCorrelations(entries) {
   const avgDouleurLowStress = lowStress.length
     ? (lowStress.reduce((a, e) => a + e.douleur, 0) / lowStress.length).toFixed(2) : null;
 
+  // ---- Day-level analyses targeting the patient's specific hypotheses ----
+  const dayMap = {};
+  for (const ev of events) {
+    const d = dayMap[ev.date] || (dayMap[ev.date] = {
+      crise: false, copieux: false, amandes: false, transitCount: 0, logged: 0,
+    });
+    d.logged++;
+    if (ev.crise > 0) d.crise = true;
+    if (ev.repas === 'copieux') d.copieux = true;
+    if (ev.tags.includes('Amandes')) d.amandes = true;
+    if (ev.transit > 0) d.transitCount++;
+  }
+  const dayKeys = Object.keys(dayMap).sort();
+  const rate = (num, den) => den > 0 ? `${num}/${den} (${Math.round(num / den * 100)}%)` : '0/0';
+
+  // a) Repas copieux → crise le jour même ou le lendemain
+  let copN = 0, copCrise = 0, nonCopN = 0, nonCopCrise = 0;
+  for (let i = 0; i < dayKeys.length; i++) {
+    const d = dayMap[dayKeys[i]];
+    const next = dayMap[dayKeys[i + 1]];
+    const criseSoon = d.crise || (next && next.crise);
+    if (d.copieux) { copN++; if (criseSoon) copCrise++; }
+    else if (d.logged > 0) { nonCopN++; if (criseSoon) nonCopCrise++; }
+  }
+
+  // b) Jour sans selle loggée → crise le lendemain (le facteur de risque rapporté)
+  let zeroN = 0, zeroCrise = 0, someN = 0, someCrise = 0;
+  for (let i = 0; i < dayKeys.length - 1; i++) {
+    const d = dayMap[dayKeys[i]];
+    const next = dayMap[dayKeys[i + 1]];
+    if (!next || d.logged < 2) continue;   // need a reasonably-logged day
+    if (d.transitCount === 0) { zeroN++; if (next.crise) zeroCrise++; }
+    else { someN++; if (next.crise) someCrise++; }
+  }
+
+  // c) Amandes → crise dans les 48 h (effet protecteur attendu : taux PLUS BAS)
+  let amN = 0, amCrise = 0, noAmN = 0, noAmCrise = 0;
+  for (let i = 0; i < dayKeys.length; i++) {
+    const d = dayMap[dayKeys[i]];
+    const next = dayMap[dayKeys[i + 1]];
+    const criseSoon = d.crise || (next && next.crise);
+    if (d.amandes) { amN++; if (criseSoon) amCrise++; }
+    else if (d.logged > 0) { noAmN++; if (criseSoon) noAmCrise++; }
+  }
+
   const lines = [];
   lines.push(`Crises totales : ${crises.length} sur ${events.length} créneaux remplis.`);
+  lines.push(`Repas copieux → crise (jour J ou J+1) : ${rate(copCrise, copN)} · jours sans copieux : ${rate(nonCopCrise, nonCopN)}`);
+  lines.push(`Jour sans selle loggée → crise le lendemain : ${rate(zeroCrise, zeroN)} · jour avec selle(s) : ${rate(someCrise, someN)}`);
+  lines.push(`Jour avec Amandes → crise (J ou J+1) : ${rate(amCrise, amN)} · sans amandes : ${rate(noAmCrise, noAmN)}`);
   if (Object.keys(tagTotal).length) {
     lines.push(`Tags présents dans les 48 h avant une crise (occurrences avant-crise / total du tag) :`);
     for (const t of Object.keys(tagTotal).sort()) {

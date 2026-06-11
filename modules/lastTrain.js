@@ -31,12 +31,12 @@ function navitiaDt(d) {
 }
 
 function n152StartTime() {
-  // N152 runs at night. Query from 22:30 today to make sure we hit
-  // tonight's schedule even if we're checking earlier in the day.
+  // N152 runs at night. During the day, query from 22:30 tonight; during
+  // the night window itself (22h-4h) query live — without the night guard,
+  // 0h-4h would jump to TOMORROW's 22:30 and hide tonight's buses.
   const t = new Date();
-  if (t.getHours() < 22) {
-    t.setHours(22, 30, 0, 0);
-  }
+  if (t.getHours() >= 22 || t.getHours() < 4) return t;
+  t.setHours(22, 30, 0, 0);
   return t;
 }
 

@@ -8,6 +8,9 @@ async function fetchForecast() {
   const cached = cacheGet('weatherCard', CACHE_TTL);
   if (cached) return cached;
   const { lat, lon } = getSettings().location;
+  if (lat == null || lon == null) {
+    throw new Error('Localisation non configurée — renseigne lat/lon dans les Réglages.');
+  }
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,is_day,wind_speed_10m,relative_humidity_2m,uv_index&hourly=temperature_2m,precipitation_probability,weather_code,is_day,uv_index&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code,uv_index_max,sunrise,sunset&timezone=Europe%2FParis&forecast_days=3`;
   const resp = await fetchWithTimeout(url, {}, 6000);
   if (!resp.ok) throw new Error(`Météo : HTTP ${resp.status}`);

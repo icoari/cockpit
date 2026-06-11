@@ -30,6 +30,7 @@ export function permissionStatus() {
 
 async function getVapidPublicKey() {
   const resp = await fetch(`${WORKER_URL}/vapid/public`);
+  if (!resp.ok) throw new Error(`VAPID public key indisponible (HTTP ${resp.status})`);
   const data = await resp.json();
   if (!data.publicKey) throw new Error('VAPID public key indisponible');
   return data.publicKey;

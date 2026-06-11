@@ -70,7 +70,9 @@ export class GasWidget {
       if (e.target.closest('[data-action="refresh"]')) {
         e.stopPropagation();
         haptic(6);
-        cacheBust(this.cacheKey());
+        // Bust the key actually used by the last fetch (GPS-coord based) —
+        // the settings-based key never matches it.
+        if (this.lastCacheKey) cacheBust(this.lastCacheKey);
         this.refresh();
         return;
       }
@@ -116,9 +118,15 @@ export class GasWidget {
     let pos = await getPosition({ timeout: 4000 });
     let geoloc = !!pos;
     if (!pos) pos = { lat: settings.location.lat, lon: settings.location.lon };
+    if (pos.lat == null || pos.lon == null) {
+      this.setBody('<div class="card__empty">Localisation indisponible — autorise la géolocalisation ou renseigne lat/lon dans les <a href="#" data-open-settings>Réglages</a>.</div>');
+      this.setSubtitle('non configuré');
+      return;
+    }
 
     let data;
     const cacheKey = `gas_${pos.lat.toFixed(2)}_${pos.lon.toFixed(2)}_${settings.gas.radiusKm}`;
+    this.lastCacheKey = cacheKey;
     const cached = cacheGet(cacheKey, CACHE_TTL);
     if (cached) {
       data = cached;

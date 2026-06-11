@@ -97,5 +97,9 @@ export class TrackersWidget {
 }
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  // Local date, not UTC — toISOString() would refuse "today" in the
+  // date picker between midnight and 2h Paris time.
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }

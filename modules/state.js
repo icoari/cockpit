@@ -1,4 +1,4 @@
-import { safeJSON, uid, todayKey } from './util.js';
+import { safeJSON, uid } from './util.js';
 import { schedulePush } from './sync.js';
 
 const KEY = 'cockpit-v3';

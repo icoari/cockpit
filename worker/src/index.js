@@ -255,6 +255,10 @@ async function handleWipe(request, env) {
   await env.KV.delete(KEY_FEED);
   await env.KV.delete(KEY_SOURCES);
   await env.KV.delete(KEY_PUSH);
+  await env.KV.delete(KEY_MONITORING);          // holds the plaintext IDFM key
+  await env.KV.delete(KEY_HEALTH_PING);
+  await env.KV.delete(KEY_ALERTED_DISRUPTIONS);
+  await env.KV.delete(KEY_LAST_TRAIN_ALERTED);
   return json({ ok: true });
 }
 
@@ -542,6 +546,11 @@ async function checkDisruptions(env) {
     }
   }
 
+  // Snapshot what was previously alerted BEFORE the send loop mutates the
+  // set — comparing after meant a freshly-sent alert looked "unchanged",
+  // the KV write was skipped, and the same disruption re-pushed every 5 min.
+  const previous = Array.from(alerted).sort();
+
   // Send one push per new alert — max 3 per cycle, the most severe first.
   // The rest are still persisted as "seen" so a backlog of minor
   // disruptions can never flood the user.
@@ -560,11 +569,9 @@ async function checkDisruptions(env) {
   // Persist the active set so each disruption alerts exactly once. When a
   // line fetch failed, keep the previous IDs too — pruning them now would
   // re-alert the same disruption when the API recovers. Skip the write
-  // entirely when nothing changed (this cron runs every 5 min; that's 200+
-  // pointless KV writes a day otherwise).
+  // when truly nothing changed (this cron runs every 5 min).
   const persistSet = anyLineFailed ? new Set([...alerted, ...stillActive]) : stillActive;
   const persist = Array.from(persistSet).sort();
-  const previous = Array.from(alerted).sort();
   if (JSON.stringify(persist) !== JSON.stringify(previous)) {
     await env.KV.put(KEY_ALERTED_DISRUPTIONS, JSON.stringify(persist));
   }
@@ -671,13 +678,15 @@ async function checkLastTrainsTonight(env) {
     probes.push({ label: 'Transilien J', dest: 'Conflans SH', line: lineJ, from: mon.stops.paris, to: mon.stops.homeAlt, earlyThreshold: 23 * 60 + 30 });
   }
 
-  const results = await Promise.all(probes.map(p => lastJourneyTonight(mon.idfmKey, p, dt).catch(() => null)));
+  // `false` = the API errored (don't alert), `null` = API answered with no
+  // journeys (that IS the alert-worthy case).
+  const results = await Promise.all(probes.map(p => lastJourneyTonight(mon.idfmKey, p, dt).catch(() => false)));
 
   const findings = [];
   for (let i = 0; i < probes.length; i++) {
     const r = results[i];
+    if (r === false) continue;   // transient API failure — skip, don't false-alert
     if (!r || !r.departMs) {
-      // No journey returned at all — that itself is a flag.
       findings.push({ probe: probes[i], type: 'none', text: 'aucun départ trouvé ce soir' });
       continue;
     }
@@ -726,8 +735,9 @@ async function lastJourneyTonight(apiKey, probe, dt) {
             + `&allowed_id[]=${encodeURIComponent(probe.line)}`
             + `&count=50`;
   const r = await fetch(url, { headers: { 'apikey': apiKey }, signal: AbortSignal.timeout(12_000) });
-  if (!r.ok) return null;
+  if (!r.ok) return false;        // API failure ≠ "no journeys tonight"
   const data = await r.json();
+  if (data.error) return false;
   const journeys = data.journeys || [];
   if (journeys.length === 0) return null;
   const last = journeys[journeys.length - 1];
@@ -832,7 +842,10 @@ async function aggregateFeed(env) {
   const sources = sourcesRaw ? JSON.parse(sourcesRaw) : {};
   const youtube = (sources.youtube || []).filter(c => c.enabled !== false && c.channelId);
   const rss = (sources.rss || []).filter(s => s.enabled !== false && s.url);
-  const baseline = BASELINE_RSS.filter(b => !rss.some(s => s.url === b.url));
+  // Dedupe baseline against ALL user entries (enabled or not) — a user who
+  // disabled a baseline feed must not get it re-fetched via the baseline.
+  const allUserUrls = new Set((sources.rss || []).map(s => s.url).filter(Boolean));
+  const baseline = BASELINE_RSS.filter(b => !allUserUrls.has(b.url));
 
   const tasks = [];
   for (const ch of youtube) tasks.push(fetchYouTubeFeed(ch));

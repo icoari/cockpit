@@ -321,6 +321,7 @@ export class CalendarWidget {
       if (e.target.closest('[data-action="create-cancel"]')) {
         e.stopPropagation();
         this.createOpen = false;
+        this.createDraft = null;
         this.renderBody();
         return;
       }
@@ -352,6 +353,7 @@ export class CalendarWidget {
 
   toggleCreate() {
     this.createOpen = !this.createOpen;
+    if (!this.createOpen) this.createDraft = null;
     this.renderBody();
     if (this.createOpen) {
       setTimeout(() => {
@@ -373,6 +375,7 @@ export class CalendarWidget {
     try {
       await createEvent(title, startDate, endDate, this.createColorId);
       this.createOpen = false;
+      this.createDraft = null;
       this.createColorId = '';
       haptic(12);
       await this.refresh();
@@ -453,8 +456,16 @@ export class CalendarWidget {
     }
   }
 
-  // Render the body part only — grid + selected day events + create form
+  // Render the body part only — grid + selected day events + create form.
+  // Snapshot the create-form inputs first: tapping a day cell re-renders
+  // and would otherwise wipe a half-typed event title.
   renderBody() {
+    const titleEl = this.container.querySelector('[data-create-title]');
+    const startEl = this.container.querySelector('[data-create-start]');
+    const endEl   = this.container.querySelector('[data-create-end]');
+    if (titleEl) {
+      this.createDraft = { title: titleEl.value, start: startEl?.value || '', end: endEl?.value || '' };
+    }
     const grid = this.renderGrid();
     const list = this.renderSelectedDayList();
     const createForm = this.createOpen ? this.renderCreateForm() : '';
@@ -575,7 +586,8 @@ export class CalendarWidget {
   }
 
   renderCreateForm() {
-    const defaultDate = this.selectedDay;
+    const draft = this.createDraft || {};
+    const defaultDate = draft.start || this.selectedDay;
     const colorChoices = [
       { id: '', color: '#7FD1B9', label: 'Par défaut' },
       { id: '1',  color: GOOGLE_COLORS['1'],  label: 'Lavande' },
@@ -600,11 +612,11 @@ export class CalendarWidget {
     `).join('');
     return `
       <div class="cal-create">
-        <input class="input cal-create__title" type="text" placeholder="Titre de l'événement" data-create-title>
+        <input class="input cal-create__title" type="text" placeholder="Titre de l'événement" data-create-title value="${escapeHTML(draft.title || '')}">
         <div class="cal-create__dates">
-          <input class="input" type="date" value="${defaultDate}" data-create-start>
+          <input class="input" type="date" value="${escapeHTML(draft.start || defaultDate)}" data-create-start>
           <span class="cal-create__sep">→</span>
-          <input class="input" type="date" value="${defaultDate}" data-create-end>
+          <input class="input" type="date" value="${escapeHTML(draft.end || defaultDate)}" data-create-end>
         </div>
         <div class="cal-create__colors">${colorsHtml}</div>
         <div class="btn-row">

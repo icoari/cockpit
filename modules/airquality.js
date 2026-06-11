@@ -8,6 +8,9 @@ async function fetchAir() {
   const cached = cacheGet('air', CACHE_TTL);
   if (cached) return cached;
   const { lat, lon } = getSettings().location;
+  if (lat == null || lon == null) {
+    throw new Error('Localisation non configurée — renseigne lat/lon dans les Réglages.');
+  }
   const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=european_aqi,pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,ozone,sulphur_dioxide&hourly=alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen&timezone=Europe%2FParis&forecast_days=1`;
   const resp = await fetchWithTimeout(url, {}, 6000);
   if (!resp.ok) throw new Error(`Air : HTTP ${resp.status}`);

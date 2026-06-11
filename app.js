@@ -449,7 +449,8 @@ function refreshProjectStats() {
     if (days.length === 0) {
       setStat('health', 'Aucune entrée', null);
     } else {
-      const startDate = new Date(data?.startDate || '2026-05-14');
+      const [sy, sm, sd] = (data?.startDate || '2026-05-14').split('-').map(Number);
+      const startDate = new Date(sy, sm - 1, sd);   // local midnight, not UTC
       const today = new Date(); today.setHours(0,0,0,0);
       const dayN = Math.max(1, Math.floor((today - startDate) / 86400000) + 1);
       const totalPeriod = 31;

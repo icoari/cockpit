@@ -263,8 +263,8 @@ export class SettingsPanel {
           case 'calendarClientId':   settings.calendar.clientId = v.trim(); break;
           case 'calendarId':         settings.calendar.calendarId = v.trim() || 'primary'; break;
           case 'locName':            settings.location.name = v.trim(); break;
-          case 'locLat':             settings.location.lat = parseFloat(v) || 0; break;
-          case 'locLon':             settings.location.lon = parseFloat(v) || 0; break;
+          case 'locLat': { const f = parseFloat(v); settings.location.lat = Number.isFinite(f) ? f : null; break; }
+          case 'locLon': { const f = parseFloat(v); settings.location.lon = Number.isFinite(f) ? f : null; break; }
           case 'gasRadius':          settings.gas.radiusKm = Math.max(1, parseInt(v, 10) || 8); break;
           case 'encombrantsAddress': settings.encombrants.address = v.trim(); break;
           case 'encombrantsPattern': settings.encombrants.pattern = v; break;

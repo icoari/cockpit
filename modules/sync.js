@@ -47,8 +47,14 @@ export function getSyncMeta() {
 
 // One-shot remote setup. Called the first time the user enables sync ANYWHERE.
 // Subsequent devices use unlockSync() instead.
+async function fetchSalt() {
+  const resp = await fetch(`${WORKER_URL}/sync/salt`);
+  if (!resp.ok) throw new Error(`Worker indisponible (HTTP ${resp.status}).`);
+  return resp.json();
+}
+
 export async function setupSync(passphrase) {
-  const remote = await fetch(`${WORKER_URL}/sync/salt`).then(r => r.json());
+  const remote = await fetchSalt();
   if (remote.setup) {
     throw new Error('Sync déjà activé sur ce compte. Utilise « Restaurer » à la place.');
   }
@@ -73,7 +79,7 @@ export async function setupSync(passphrase) {
 // Re-derive keys from passphrase on a fresh device, verify against the Worker,
 // then pull the existing backup if any.
 export async function unlockSync(passphrase) {
-  const remote = await fetch(`${WORKER_URL}/sync/salt`).then(r => r.json());
+  const remote = await fetchSalt();
   if (!remote.setup) {
     throw new Error('Aucune sauvegarde n\'existe — active la sync d\'abord sur un appareil.');
   }

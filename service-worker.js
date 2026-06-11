@@ -1,4 +1,4 @@
-const CACHE = 'bob-v51';
+const CACHE = 'bob-v52';
 const ASSETS = [
   './',
   './index.html',
@@ -69,8 +69,12 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
+  // Navigations may carry query strings (?goto=… deep links) — match the
+  // cached shell regardless or offline loads through those URLs fail.
+  const matchOpts = req.mode === 'navigate' ? { ignoreSearch: true } : undefined;
+
   e.respondWith(
-    caches.match(req).then(cached => {
+    caches.match(req, matchOpts).then(cached => {
       const fetchPromise = fetch(req).then(resp => {
         if (resp && resp.status === 200 && resp.type === 'basic') {
           const clone = resp.clone();

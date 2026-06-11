@@ -158,7 +158,7 @@ export class PharmaciesWidget {
       if (e.target.closest('[data-action="refresh"]')) {
         e.stopPropagation();
         haptic(6);
-        cacheBust('pharma');
+        if (this.lastCacheKey) cacheBust(this.lastCacheKey);
         this.refresh();
       }
     });
@@ -184,8 +184,14 @@ export class PharmaciesWidget {
     let pos = await getPosition({ timeout: 4000 });
     let geoloc = !!pos;
     if (!pos) pos = { lat: settings.location.lat, lon: settings.location.lon };
+    if (pos.lat == null || pos.lon == null) {
+      this.setBody('<div class="card__empty">Localisation indisponible — autorise la géolocalisation ou renseigne lat/lon dans les <a href="#" data-open-settings>Réglages</a>.</div>');
+      this.setSubtitle('non configuré');
+      return;
+    }
 
     const cacheKey = `pharma_v2_${pos.lat.toFixed(3)}_${pos.lon.toFixed(3)}_${radiusKm}`;
+    this.lastCacheKey = cacheKey;
     let entries = cacheGet(cacheKey, CACHE_TTL);
     if (!entries) {
       try {

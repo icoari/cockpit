@@ -4,7 +4,7 @@
 
 import { ICONS } from './icons.js';
 import { escapeHTML, fetchWithTimeout, timeAgo, haptic, safeUrl } from './util.js';
-import { getSettings } from './state.js';
+import { getSettings, getState } from './state.js';
 import { isConfigured as llmConfigured, complete } from './llm.js';
 
 const GREETING_KEY = 'bob-home-greeting-v1';
@@ -32,8 +32,8 @@ function weatherLabelFromCode(c) {
   if (c === 3) return 'couvert';
   if (c === 45 || c === 48) return 'brouillard';
   if (c >= 51 && c <= 67) return 'pluie';
-  if (c >= 71 && c <= 86) return 'neige';
-  if (c >= 80 && c <= 82) return 'averses';
+  if (c >= 80 && c <= 82) return 'averses';      // before the snow range — 80-82 is rain showers
+  if ((c >= 71 && c <= 77) || c === 85 || c === 86) return 'neige';
   if (c >= 95) return 'orage';
   return 'changeant';
 }
@@ -107,7 +107,10 @@ function getProjectStats() {
     if (days.length === 0) {
       out.health = { label: 'Suivi santé', sub: 'Aucune entrée', accent: 'p-health' };
     } else {
-      const startDate = new Date(data?.startDate || '2026-05-14');
+      // Parse as LOCAL midnight — new Date('YYYY-MM-DD') is UTC midnight and
+      // undercounts by one day in UTC+ timezones.
+      const [sy, sm, sd] = (data?.startDate || '2026-05-14').split('-').map(Number);
+      const startDate = new Date(sy, sm - 1, sd);
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const dayN = Math.max(1, Math.floor((today - startDate) / 86400000) + 1);
       const total = days.reduce((s, d) => s + Object.keys(entries[d] || {}).length, 0);
@@ -127,7 +130,8 @@ function getProjectStats() {
     }
   } catch {}
   try {
-    const trackers = getSettings().trackers || {};
+    // Trackers live at the state root, not under settings.
+    const trackers = getState().trackers || {};
     const last = trackers.coiffeur;
     out.coiffeur = last
       ? { label: 'Coiffeur', sub: ago(last), accent: 'p-beiue' }

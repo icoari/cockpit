@@ -311,8 +311,8 @@ function weatherLabel(code) {
   if (code === 3) return 'couvert';
   if (code === 45 || code === 48) return 'brouillard';
   if (code >= 51 && code <= 67) return 'pluie';
-  if (code >= 71 && code <= 86) return 'neige';
-  if (code >= 80 && code <= 82) return 'averses';
+  if (code >= 80 && code <= 82) return 'averses';      // before the snow range — 80-82 is rain showers
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return 'neige';
   if (code >= 95) return 'orage';
   return 'changeant';
 }

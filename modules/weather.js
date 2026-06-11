@@ -9,6 +9,9 @@ export async function fetchWeather() {
   if (cached) return cached;
 
   const { lat, lon } = getSettings().location;
+  if (lat == null || lon == null) {
+    throw Object.assign(new Error('Localisation non configurée (Réglages).'), { notConfigured: true });
+  }
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min&timezone=Europe%2FParis&forecast_days=1`;
 
   const resp = await fetchWithTimeout(url, {}, 6000);

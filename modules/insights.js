@@ -1,14 +1,22 @@
-// Pattern analysis over the health-tracker entries — reads the encrypted
-// blob in localStorage (same origin), produces a concise prompt, asks the
-// assistant for medically-cautious observations.
+// Correlation analysis over the health-tracker journal. Pre-computes the
+// hard numbers client-side (lag-window co-occurrences, day-of-week, slot
+// distributions) so the model interprets data instead of recounting it,
+// then asks for cautious correlation/causality hypotheses.
 
 import { stream } from './llm.js';
 
-const SYSTEM = `Tu analyses un journal de santé personnel sur 31 jours (3 créneaux/jour : matin, midi, soir).
-Chaque entrée comporte une note 1-5 (5 = au mieux, 1 = au pire), un éventuel cachet pris, une éventuelle crise (intensité 1-5 + heure), et un commentaire libre.
-Tu ne donnes JAMAIS de diagnostic médical. Tu ne recommandes pas de médicaments.
-Tu cherches des CORRÉLATIONS et MOTIFS dans les données fournies, factuels et chiffrés.
-Réponds en français, structuré, concis. Mentionne les limites (échantillon court, biais auto-déclaratif) si pertinent.`;
+const SYSTEM = `Tu analyses le journal de santé digestive de Nicolas (douleurs de ventre, troubles intestinaux, crises de diarrhée).
+Phase 1 : traitement du 14/05 au 13/06/2026. Ensuite : suivi continu post-traitement.
+
+Chaque créneau (matin/midi/soir) peut contenir : note globale 1-5 (5 = au mieux), cachet pris, crise 1-5 + heure, douleur ventre 1-5, transit sur l'échelle de Bristol (1-7, 3-4 = normal, 6-7 = diarrhée), stress 1-5, tags repas (Gras, Épicé, Lactose…), commentaire libre.
+
+RÈGLES D'ANALYSE
+- Tu cherches des CORRÉLATIONS chiffrées et des MOTIFS temporels. Les fenêtres de latence digestives pertinentes vont de 30 minutes à 72 h (un repas du soir peut déclencher une crise le lendemain).
+- Pour chaque corrélation, donne un degré de confiance honnête (faible / moyen / fort) basé sur le nombre d'occurrences. Moins de 3 occurrences = anecdotique, dis-le.
+- Distingue corrélation et causalité. Tu peux formuler des HYPOTHÈSES causales prudentes, jamais des affirmations.
+- Compare la période traitement vs post-traitement quand les deux existent.
+- JAMAIS de diagnostic médical, jamais de recommandation de médicament.
+- Réponds en français, structuré, concis. Markdown léger (gras, listes).`;
 
 function summarizeEntries(entries) {
   const days = Object.keys(entries).sort();
@@ -20,42 +28,129 @@ function summarizeEntries(entries) {
     for (const s of slots) {
       const e = day[s];
       if (!e) continue;
-      const note = e.note;
-      const cachet = e.cachet ? ' C' : '';
-      const crise = (typeof e.crise === 'number' ? e.crise : (e.crise ? 3 : 0));
-      const cr = crise > 0 ? ` crise${crise}${e.criseTime ? '@' + e.criseTime : ''}` : '';
-      const comment = e.notes ? ` "${e.notes.replace(/"/g, "'").slice(0, 80)}"` : '';
-      bits.push(`${s[0]}:${note}${cachet}${cr}${comment}`);
+      let bit = `${s[0]}:${e.note}`;
+      if (e.cachet) bit += 'C';
+      const crise = typeof e.crise === 'number' ? e.crise : (e.crise ? 3 : 0);
+      if (crise > 0) bit += ` crise${crise}${e.criseTime ? '@' + e.criseTime : ''}`;
+      if (e.douleur > 0) bit += ` dlr${e.douleur}`;
+      if (e.transit > 0) bit += ` B${e.transit}`;
+      if (e.stress > 0) bit += ` str${e.stress}`;
+      if (Array.isArray(e.tags) && e.tags.length) bit += ` [${e.tags.join(',')}]`;
+      if (e.notes) bit += ` "${e.notes.replace(/"/g, "'").slice(0, 70)}"`;
+      bits.push(bit);
     }
     if (bits.length) lines.push(`${d} → ${bits.join(' | ')}`);
   }
   return lines.join('\n');
 }
 
-function summaryStats(entries) {
+// Hard numbers computed locally — the model interprets, it doesn't count.
+function computeCorrelations(entries) {
   const slots = ['matin', 'midi', 'soir'];
-  let total = 0, count = 0, criseN = 0, criseIntensity = 0, cachetN = 0;
-  const perSlot = { matin: { sum: 0, n: 0 }, midi: { sum: 0, n: 0 }, soir: { sum: 0, n: 0 } };
-  for (const d of Object.keys(entries)) {
-    const day = entries[d] || {};
+  const slotOffset = { matin: 0, midi: 1, soir: 2 };   // pseudo-time within day
+  const events = [];   // flattened, ordered
+
+  for (const d of Object.keys(entries).sort()) {
     for (const s of slots) {
-      const e = day[s];
+      const e = entries[d][s];
       if (!e) continue;
-      total += e.note; count++;
-      perSlot[s].sum += e.note; perSlot[s].n++;
-      if (e.cachet) cachetN++;
-      const c = typeof e.crise === 'number' ? e.crise : (e.crise ? 3 : 0);
-      if (c > 0) { criseN++; criseIntensity += c; }
+      events.push({
+        date: d, slot: s,
+        t: new Date(d + 'T00:00:00').getTime() + slotOffset[s] * 7 * 3600 * 1000 + 5 * 3600 * 1000,
+        crise: typeof e.crise === 'number' ? e.crise : (e.crise ? 3 : 0),
+        douleur: e.douleur || 0,
+        transit: e.transit || 0,
+        stress: e.stress || 0,
+        tags: Array.isArray(e.tags) ? e.tags : [],
+        note: e.note,
+        cachet: !!e.cachet,
+      });
     }
   }
-  return {
-    days: Object.keys(entries).length,
-    fills: count,
-    avgNote: count ? (total / count).toFixed(2) : null,
-    perSlot: Object.fromEntries(slots.map(s => [s, perSlot[s].n ? +(perSlot[s].sum / perSlot[s].n).toFixed(2) : null])),
-    cachets: cachetN,
-    crises: { count: criseN, avgIntensity: criseN ? +(criseIntensity / criseN).toFixed(2) : null },
-  };
+
+  const crises = events.filter(e => e.crise > 0);
+  const LAG = 48 * 3600 * 1000;   // look-back window before each crisis
+
+  // Tag → crisis co-occurrence within the 48 h window preceding the crisis
+  const tagBefore = {};
+  const tagTotal = {};
+  for (const ev of events) for (const t of ev.tags) tagTotal[t] = (tagTotal[t] || 0) + 1;
+  for (const cr of crises) {
+    const seen = new Set();
+    for (const ev of events) {
+      if (ev.t < cr.t - LAG || ev.t >= cr.t) continue;
+      for (const t of ev.tags) seen.add(t);
+    }
+    for (const t of seen) tagBefore[t] = (tagBefore[t] || 0) + 1;
+  }
+
+  // Day-of-week distribution of crises
+  const dowNames = ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'];
+  const crisesByDow = {};
+  for (const cr of crises) {
+    const dow = dowNames[new Date(cr.date + 'T12:00:00').getDay()];
+    crisesByDow[dow] = (crisesByDow[dow] || 0) + 1;
+  }
+
+  // Slot distribution
+  const crisesBySlot = {};
+  for (const cr of crises) crisesBySlot[cr.slot] = (crisesBySlot[cr.slot] || 0) + 1;
+
+  // Stress / douleur relationship (same slot)
+  const stressWith = events.filter(e => e.stress > 0);
+  const highStress = stressWith.filter(e => e.stress >= 3);
+  const avgDouleurHighStress = highStress.length
+    ? (highStress.reduce((a, e) => a + e.douleur, 0) / highStress.length).toFixed(2) : null;
+  const lowStress = stressWith.filter(e => e.stress < 3);
+  const avgDouleurLowStress = lowStress.length
+    ? (lowStress.reduce((a, e) => a + e.douleur, 0) / lowStress.length).toFixed(2) : null;
+
+  const lines = [];
+  lines.push(`Crises totales : ${crises.length} sur ${events.length} créneaux remplis.`);
+  if (Object.keys(tagTotal).length) {
+    lines.push(`Tags présents dans les 48 h avant une crise (occurrences avant-crise / total du tag) :`);
+    for (const t of Object.keys(tagTotal).sort()) {
+      lines.push(`  - ${t} : ${tagBefore[t] || 0}/${tagTotal[t]}`);
+    }
+  }
+  if (Object.keys(crisesByDow).length) {
+    lines.push(`Crises par jour de semaine : ${Object.entries(crisesByDow).map(([d, n]) => `${d}=${n}`).join(', ')}`);
+  }
+  if (Object.keys(crisesBySlot).length) {
+    lines.push(`Crises par créneau : ${Object.entries(crisesBySlot).map(([s, n]) => `${s}=${n}`).join(', ')}`);
+  }
+  if (avgDouleurHighStress !== null && avgDouleurLowStress !== null) {
+    lines.push(`Douleur moyenne quand stress ≥3 : ${avgDouleurHighStress} · quand stress <3 : ${avgDouleurLowStress}`);
+  }
+  return lines.join('\n');
+}
+
+function summaryStats(entries) {
+  const slots = ['matin', 'midi', 'soir'];
+  const TREAT_END = '2026-06-13';
+  const acc = () => ({ total: 0, count: 0, criseN: 0, cachetN: 0, douleurSum: 0, douleurN: 0, transitN: 0, transitNormal: 0 });
+  const phases = { traitement: acc(), apres: acc() };
+  for (const d of Object.keys(entries)) {
+    const bucket = d <= TREAT_END ? phases.traitement : phases.apres;
+    for (const s of slots) {
+      const e = entries[d][s];
+      if (!e) continue;
+      bucket.total += e.note; bucket.count++;
+      if (e.cachet) bucket.cachetN++;
+      const c = typeof e.crise === 'number' ? e.crise : (e.crise ? 3 : 0);
+      if (c > 0) bucket.criseN++;
+      if (e.douleur > 0) { bucket.douleurSum += e.douleur; bucket.douleurN++; }
+      if (e.transit > 0) {
+        bucket.transitN++;
+        if (e.transit >= 3 && e.transit <= 4) bucket.transitNormal++;
+      }
+    }
+  }
+  const fmt = (b, label) => b.count === 0 ? `${label} : aucune donnée` :
+    `${label} : note moy ${(b.total / b.count).toFixed(2)}, ${b.criseN} crises, cachets ${b.cachetN}, ` +
+    `douleur moy ${b.douleurN ? (b.douleurSum / b.douleurN).toFixed(2) : '—'}, ` +
+    `transit normal ${b.transitN ? Math.round(b.transitNormal / b.transitN * 100) + '%' : '—'}`;
+  return fmt(phases.traitement, 'Traitement (14/05→13/06)') + '\n' + fmt(phases.apres, 'Post-traitement (14/06→)');
 }
 
 export async function analyzeHealth({ entries, onChunk }) {
@@ -63,30 +158,27 @@ export async function analyzeHealth({ entries, onChunk }) {
     onChunk('Pas encore de données de suivi à analyser.');
     return;
   }
-  const stats = summaryStats(entries);
-  const journal = summarizeEntries(entries);
-  const userPrompt = `Stats agrégées :
-- Jours avec au moins une entrée : ${stats.days}
-- Créneaux remplis : ${stats.fills}
-- Note moyenne : ${stats.avgNote} / 5
-- Moyennes par créneau : matin ${stats.perSlot.matin ?? '—'}, midi ${stats.perSlot.midi ?? '—'}, soir ${stats.perSlot.soir ?? '—'}
-- Cachets pris : ${stats.cachets}
-- Crises : ${stats.crises.count} (intensité moyenne ${stats.crises.avgIntensity ?? '—'} / 5)
+  const userPrompt = `STATS PAR PHASE
+${summaryStats(entries)}
 
-Journal détaillé (date → m/M/s : note + flags) :
-${journal}
+CORRÉLATIONS PRÉ-CALCULÉES (chiffres exacts, à interpréter)
+${computeCorrelations(entries)}
 
-Analyse ces données et fournis :
-1. **Tendance globale** (en 1 phrase chiffrée)
-2. **Corrélations marquantes** (créneau le plus à risque, lien éventuel cachet/crise, motifs temporels)
-3. **Points d'attention** (jours notables, séquences suspectes)
-4. **Pistes à creuser avec un médecin** (questions concrètes à préparer, pas de diagnostic)`;
+JOURNAL DÉTAILLÉ (date → créneaux ; C=cachet, dlr=douleur, B=Bristol, str=stress)
+${summarizeEntries(entries)}
+
+Analyse en 5 blocs :
+1. **Tendance** — évolution globale, comparaison traitement vs post-traitement si applicable (1-2 phrases chiffrées)
+2. **Corrélations** — les motifs les plus solides dans les chiffres pré-calculés, avec degré de confiance (faible/moyen/fort selon le nombre d'occurrences)
+3. **Hypothèses causales prudentes** — ce qui MÉRITERAIT d'être testé (ex. éviter un tag 2 semaines), en soulignant l'incertitude
+4. **Signaux faibles** — motifs intrigants mais sous-échantillonnés, à surveiller
+5. **Pour le médecin** — 2-3 questions concrètes à poser, fondées sur les données`;
   await stream(
     [
       { role: 'system', content: SYSTEM },
       { role: 'user', content: userPrompt },
     ],
     onChunk,
-    { temperature: 0.35, maxTokens: 1400 },
+    { temperature: 0.3, maxTokens: 1800 },
   );
 }

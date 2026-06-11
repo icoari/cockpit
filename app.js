@@ -454,7 +454,10 @@ function refreshProjectStats() {
       const today = new Date(); today.setHours(0,0,0,0);
       const dayN = Math.max(1, Math.floor((today - startDate) / 86400000) + 1);
       const totalPeriod = 31;
-      setStat('health', `Jour ${Math.min(dayN, totalPeriod)} / ${totalPeriod}`, `${totalSlots} entrées`);
+      const label = dayN <= totalPeriod
+        ? `Jour ${dayN} / ${totalPeriod}`
+        : `J+${dayN - totalPeriod} post-traitement`;
+      setStat('health', label, `${totalSlots} entrées`);
     }
   } catch { setStat('health', 'Aucune entrée', null); }
 

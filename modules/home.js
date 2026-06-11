@@ -114,7 +114,8 @@ function getProjectStats() {
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const dayN = Math.max(1, Math.floor((today - startDate) / 86400000) + 1);
       const total = days.reduce((s, d) => s + Object.keys(entries[d] || {}).length, 0);
-      out.health = { label: 'Suivi santé', sub: `Jour ${Math.min(dayN, 31)} / 31 · ${total} entrées`, accent: 'p-health' };
+      const phase = dayN <= 31 ? `Jour ${dayN} / 31` : `J+${dayN - 31} post-traitement`;
+      out.health = { label: 'Suivi santé', sub: `${phase} · ${total} entrées`, accent: 'p-health' };
     }
   } catch {}
   try {

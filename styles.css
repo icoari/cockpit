@@ -2458,6 +2458,94 @@ body.theme-light .tabbar { background: rgba(255, 255, 255, 0.78); }
   -webkit-overflow-scrolling: touch;
 }
 
+/* Group label between accordion clusters */
+.settings-group {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 26px 4px 10px;
+}
+.settings-group:first-child { margin-top: 4px; }
+
+/* Accordion sections */
+.acc {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  margin-bottom: 8px;
+  overflow: hidden;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transition: border-color 200ms var(--ease);
+}
+.acc--open { border-color: var(--border-strong); }
+
+.acc__head {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 16px;
+  background: none;
+  border: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  color: var(--text);
+}
+.acc__head:hover { background: var(--surface-hover); }
+
+.acc__title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.acc__summary {
+  font-size: 12px;
+  color: var(--text-faint);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: -0.005em;
+}
+.acc__summary--ok { color: var(--accent); font-weight: 600; }
+
+.acc__chevron {
+  display: inline-flex;
+  color: var(--text-mute);
+  transition: transform 240ms var(--ease);
+}
+.acc__chevron svg { width: 15px; height: 15px; }
+.acc--open .acc__chevron { transform: rotate(180deg); }
+
+.acc__body {
+  padding: 4px 16px 18px;
+  border-top: 1px solid var(--hairline);
+  animation: accIn 240ms var(--ease-out);
+}
+.acc__body > :first-child { margin-top: 12px; }
+
+@keyframes accIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Two selects side by side (Assistant section) */
+.settings-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.settings-2col .input { margin-bottom: 0; }
+
+/* Legacy block (still used inside accordion bodies for descriptions) */
 .settings-section {
   margin-bottom: 18px;
   padding: 20px;
@@ -2466,20 +2554,6 @@ body.theme-light .tabbar { background: rgba(255, 255, 255, 0.78); }
   border-radius: var(--r-lg);
   position: relative;
   overflow: hidden;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-}
-
-.settings-section::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 16px; right: 16px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.10), transparent);
-  pointer-events: none;
-}
-body.theme-light .settings-section::before {
-  background: linear-gradient(90deg, transparent, rgba(20, 20, 30, 0.08), transparent);
 }
 
 .settings-section__title {
@@ -2637,8 +2711,57 @@ body.theme-light .btn--danger { color: var(--danger); }
   padding: 5px 9px;
   font-size: 12px;
   border-radius: 7px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 .crud-item__action:hover { color: var(--danger); }
+
+/* Compact rows for long toggle lists (sources, chaînes) */
+.crud-list--compact { gap: 2px; margin-bottom: 0; }
+
+.crud-item--compact {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.crud-item--compact:hover { background: var(--surface-hover); border: none; }
+
+.crud-item--compact input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+.crud-item--compact .crud-item__name {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crud-item__lang {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+}
+
+.crud-item--compact .crud-item__action {
+  font-size: 16px;
+  line-height: 1;
+  padding: 3px 7px;
+  opacity: 0.55;
+}
+.crud-item--compact .crud-item__action:hover { opacity: 1; }
 
 /* ============================================================
    AI watch search + lang badge

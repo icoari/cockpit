@@ -18,20 +18,63 @@ import {
   isSubscribed, sendTestPush, pushMonitoring,
 } from './notifications.js';
 
+const ICONS_CHEVRON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+
 export class SettingsPanel {
   constructor(rootEl, onChange) {
     this.root = rootEl;
     this.onChange = onChange || (() => {});
+    this.open = new Set();   // which accordion sections are expanded
     this.render();
+  }
+
+  // One collapsible section: header (title + live summary + chevron) and a
+  // body that only exists in the layout when expanded.
+  section(id, title, summary, bodyHtml) {
+    const isOpen = this.open.has(id);
+    return `
+      <div class="acc ${isOpen ? 'acc--open' : ''}" data-acc="${id}">
+        <button class="acc__head" type="button" data-acc-head="${id}">
+          <span class="acc__title">${escapeHTML(title)}</span>
+          <span class="acc__summary">${summary}</span>
+          <span class="acc__chevron">${ICONS_CHEVRON}</span>
+        </button>
+        <div class="acc__body" ${isOpen ? '' : 'hidden'}>${bodyHtml}</div>
+      </div>
+    `;
+  }
+
+  groupLabel(text) {
+    return `<div class="settings-group">${escapeHTML(text)}</div>`;
+  }
+
+  // Refresh the live counters in the accordion headers without re-rendering
+  // (so checkbox toggling keeps focus + scroll position).
+  updateCounts() {
+    const s = getSettings();
+    const setSummary = (id, text) => {
+      const el = this.root.querySelector(`[data-acc="${id}"] .acc__summary`);
+      if (el) el.textContent = text;
+    };
+    const rssOn = s.aiSources.filter(x => x.enabled).length;
+    const ytOn = (s.youtube?.channels || []).filter(c => c.enabled).length;
+    setSummary('rss', `${rssOn} active${rssOn > 1 ? 's' : ''} / ${s.aiSources.length}`);
+    setSummary('youtube', `${ytOn} active${ytOn > 1 ? 's' : ''} / ${(s.youtube?.channels || []).length}`);
   }
 
   render() {
     const s = getSettings();
-    const isLight = document.body.classList.contains('theme-light');
+    const themeLabel = s.theme === 'dark' ? 'Sombre' : s.theme === 'light' ? 'Clair' : 'Auto';
+    const rssOn = s.aiSources.filter(x => x.enabled).length;
+    const ytOn = (s.youtube?.channels || []).filter(c => c.enabled).length;
+    const alertsOn = [s.alerts?.trainAlerts !== false, s.alerts?.morningBrief !== false, !!s.alerts?.healthReminder].filter(Boolean).length;
+    const ok = (label) => `<span class="acc__summary--ok">${escapeHTML(label)}</span>`;
+    const dim = (label) => escapeHTML(label);
 
     this.root.innerHTML = `
-      <div class="settings-section">
-        <div class="settings-section__title">Apparence</div>
+      ${this.groupLabel('Général')}
+
+      ${this.section('theme', 'Apparence', dim(themeLabel), `
         <div class="theme-row" data-theme-row>
           ${['auto', 'dark', 'light'].map(t => `
             <button class="theme-btn ${s.theme === t ? 'theme-btn--active' : ''}" data-theme="${t}" type="button">
@@ -39,165 +82,18 @@ export class SettingsPanel {
             </button>
           `).join('')}
         </div>
-      </div>
+      `)}
 
-      <div class="settings-section">
-        <div class="settings-section__title">Clé API IDFM</div>
+      ${this.section('location', 'Localisation', s.location?.name ? dim(s.location.name) : dim('non configurée'), `
+        <div class="settings-section__desc">Position par défaut, utilisée si la géolocalisation est refusée.</div>
+        <input class="input" type="text" placeholder="Nom" data-field="locName" value="${escapeHTML(s.location.name || '')}">
+        <input class="input" type="number" step="0.001" placeholder="Latitude" data-field="locLat" value="${s.location.lat ?? ''}">
+        <input class="input" type="number" step="0.001" placeholder="Longitude" data-field="locLon" value="${s.location.lon ?? ''}">
+      `)}
+
+      ${this.section('notifs', 'Notifications', alertsOn ? ok(`${alertsOn} alerte${alertsOn > 1 ? 's' : ''}`) : dim('inactives'), `
         <div class="settings-section__desc">
-          Pour les trains. Inscription gratuite (3 min) sur
-          <a href="https://prim.iledefrance-mobilites.fr/" target="_blank" rel="noopener">prim.iledefrance-mobilites.fr</a>.
-        </div>
-        <input class="input" type="password" placeholder="apikey IDFM…" data-field="idfmKey" value="${escapeHTML(s.idfm.apiKey)}">
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-section__title">Assistant</div>
-        <div class="settings-section__desc">
-          Transite par ton Worker Cloudflare (la sync doit être activée).
-          Trois cas typiques :
-          <br>· <strong>Azure AI Foundry · Anthropic</strong> — URL <code>…/anthropic/v1/messages?api-version=2024-05-01-preview</code>, format Anthropic, auth api-key
-          <br>· <strong>Azure AI Foundry · OpenAI-compat</strong> — URL <code>…/models/chat/completions?api-version=2024-05-01-preview</code>, format OpenAI, auth api-key
-          <br>· <strong>LiteLLM / OpenAI</strong> — URL <code>…/v1/chat/completions</code>, format OpenAI, auth Bearer
-        </div>
-        <input class="input" type="url" placeholder="https://…/v1/messages ou /chat/completions" data-field="llmEndpoint" value="${escapeHTML(s.llm?.endpoint || '')}" autocomplete="off" spellcheck="false">
-        <input class="input" type="password" placeholder="API key" data-field="llmApiKey" value="${escapeHTML(s.llm?.apiKey || '')}" autocomplete="off" spellcheck="false">
-        <input class="input" type="text" placeholder="Modèle (ex. claude-sonnet-4-5, gpt-4o)" data-field="llmModel" value="${escapeHTML(s.llm?.model || '')}" autocomplete="off">
-        <label class="label-row" style="display:block;margin-top:6px">Format de l'API</label>
-        <select class="input" data-field="llmFormat">
-          <option value="openai"    ${(s.llm?.format || 'openai') === 'openai' ? 'selected' : ''}>OpenAI Chat Completions</option>
-          <option value="anthropic" ${s.llm?.format === 'anthropic' ? 'selected' : ''}>Anthropic Messages</option>
-        </select>
-        <label class="label-row" style="display:block;margin-top:6px">Authentification</label>
-        <select class="input" data-field="llmAuthStyle">
-          <option value="bearer" ${s.llm?.authStyle !== 'azure' ? 'selected' : ''}>Bearer (OpenAI / LiteLLM)</option>
-          <option value="azure"  ${s.llm?.authStyle === 'azure' ? 'selected' : ''}>api-key (Azure)</option>
-        </select>
-        <label class="label-row" style="display:block;margin-top:10px">
-          <input type="checkbox" data-field="llmEnabled" ${s.llm?.enabled ? 'checked' : ''}>
-          Activer l'assistant
-        </label>
-        <div class="btn-row" style="margin-top:10px">
-          <button class="btn btn--ghost" type="button" data-action="llm-ping">Tester</button>
-          <span class="settings-info" data-llm-status style="margin:0;padding:8px 12px;font-size:12px"></span>
-        </div>
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-section__title">Agenda Google</div>
-        <div class="settings-section__desc">
-          Crée un projet sur <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a>,
-          active l'API Calendar, crée un identifiant <strong>OAuth Client ID</strong> de type "Application Web",
-          et autorise l'origine <code>${escapeHTML(location.origin)}</code>. Colle le Client ID ci-dessous.
-        </div>
-        <input class="input" type="text" placeholder="OAuth Client ID Google" data-field="calendarClientId" value="${escapeHTML(s.calendar?.clientId || '')}">
-        <input class="input" type="text" placeholder="ID du calendrier (par défaut : primary)" data-field="calendarId" value="${escapeHTML(s.calendar?.calendarId || 'primary')}">
-        ${s.calendar?.token ? `<div class="settings-info">✓ Connecté à Google · <button class="link-btn" type="button" data-action="cal-disconnect">se déconnecter</button></div>` : ''}
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-section__title">Encombrants${s.encombrants?.address ? ' — ' + escapeHTML(s.encombrants.address) : ''}</div>
-        <div class="settings-section__desc">
-          Calendrier de ramassage des encombrants. Choisis ton pattern + d'éventuelles dates exceptionnelles.
-        </div>
-        <input class="input" type="text" placeholder="Adresse" data-field="encombrantsAddress" value="${escapeHTML(s.encombrants?.address || '')}">
-        <label class="label-row" style="display:block;margin-top:6px">Calendrier</label>
-        <select class="input" data-field="encombrantsPattern">
-          ${Object.entries(ENCOMBRANTS_PATTERNS).map(([key, p]) => `
-            <option value="${key}" ${s.encombrants?.pattern === key ? 'selected' : ''}>${escapeHTML(p.label)}</option>
-          `).join('')}
-        </select>
-
-        <label class="label-row" style="display:block;margin-top:14px">Dates supplémentaires (exceptions, vacances…)</label>
-        <div class="crud-list">
-          ${(s.encombrants?.extraDates || []).map(d => `
-            <div class="crud-item">
-              <div class="crud-item__main">
-                <span class="crud-item__name">${escapeHTML(new Date(d).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}</span>
-                <span class="crud-item__sub">${escapeHTML(d)}</span>
-              </div>
-              <button class="crud-item__action" data-remove-bin="${escapeHTML(d)}" type="button">supprimer</button>
-            </div>
-          `).join('') || '<div class="card__empty" style="padding:6px 0">Aucune date ajoutée.</div>'}
-        </div>
-        <div class="btn-row">
-          <input class="input" type="date" data-new-bin-date style="flex:1;margin:0">
-          <button class="btn btn--ghost" type="button" data-action="add-bin">Ajouter</button>
-        </div>
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-section__title">Localisation</div>
-        <div class="settings-section__desc">Position par défaut. Utilisée si la géolocalisation est refusée.</div>
-        <input class="input" type="text" placeholder="Nom" data-field="locName" value="${escapeHTML(s.location.name)}">
-        <input class="input" type="number" step="0.001" placeholder="Latitude" data-field="locLat" value="${s.location.lat}">
-        <input class="input" type="number" step="0.001" placeholder="Longitude" data-field="locLon" value="${s.location.lon}">
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-section__title">Stations essence</div>
-        <label class="label-row" style="display:block">Rayon de recherche (km)</label>
-        <input class="input" type="number" min="1" max="50" data-field="gasRadius" value="${s.gas.radiusKm}">
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-section__title">Chaînes YouTube</div>
-        <div class="settings-section__desc">
-          Tu trouves le Channel ID dans l'URL d'une chaîne (clique "voir le code source" et cherche "channelId").
-          Format : commence par <code>UC</code> suivi de 22 caractères.
-        </div>
-        <div class="crud-list">
-          ${(s.youtube?.channels || []).map(c => `
-            <div class="crud-item">
-              <label class="label-row" style="margin:0">
-                <input type="checkbox" data-toggle-yt="${c.id}" ${c.enabled ? 'checked' : ''}>
-              </label>
-              <div class="crud-item__main">
-                <span class="crud-item__name">${escapeHTML(c.name)} ${c.lang === 'fr' ? '<small style="color:var(--accent);font-weight:600">FR</small>' : ''}</span>
-                <span class="crud-item__sub">${escapeHTML(c.channelId)}</span>
-              </div>
-              <button class="crud-item__action" data-remove-yt="${c.id}" type="button">supprimer</button>
-            </div>
-          `).join('')}
-        </div>
-        <div class="btn-row" style="margin-top:8px">
-          <input class="input" type="text" placeholder="Nom de la chaîne" data-new-yt-name style="flex:1;margin:0">
-          <input class="input" type="text" placeholder="Channel ID (UC…)" data-new-yt-id style="flex:1;margin:0">
-          <select class="input" data-new-yt-lang style="flex:0 0 80px;margin:0">
-            <option value="en">EN</option>
-            <option value="fr">FR</option>
-          </select>
-          <button class="btn btn--ghost" type="button" data-action="add-yt">Ajouter</button>
-        </div>
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-section__title">Sources veille tech (RSS)</div>
-        <div class="settings-section__desc">Active les sources de ton choix. Les flux RSS passent par rss2json (gratuit).</div>
-        <div class="crud-list">
-          ${s.aiSources.map(src => `
-            <div class="crud-item">
-              <label class="label-row" style="margin:0">
-                <input type="checkbox" data-toggle-ai="${src.id}" ${src.enabled ? 'checked' : ''}>
-              </label>
-              <div class="crud-item__main">
-                <span class="crud-item__name">${escapeHTML(src.name)} ${src.lang === 'fr' ? '<small style="color:var(--accent);font-weight:600;letter-spacing:0.04em">FR</small>' : ''}</span>
-                ${src.url ? `<span class="crud-item__sub">${escapeHTML(src.url)}</span>` : `<span class="crud-item__sub">${escapeHTML(src.type)}</span>`}
-              </div>
-              <button class="crud-item__action" data-remove-ai="${src.id}" type="button">supprimer</button>
-            </div>
-          `).join('')}
-        </div>
-        <div class="btn-row" style="margin-top:8px">
-          <input class="input" type="text" placeholder="Nom" data-new-ai-name style="flex:1;margin:0">
-          <input class="input" type="url" placeholder="URL RSS" data-new-ai-url style="flex:2;margin:0">
-          <button class="btn btn--ghost" type="button" data-action="add-ai">Ajouter</button>
-        </div>
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-section__title">Notifications</div>
-        <div class="settings-section__desc">
-          Push iOS via Web Push standard. <strong>Bob doit être ajouté à l'écran d'accueil</strong> pour que ça fonctionne sur iPhone.
+          Push iOS via Web Push. <strong>Bob doit être sur l'écran d'accueil</strong> pour fonctionner sur iPhone.
         </div>
         <div id="pushStatus" class="settings-info" style="margin:0 0 10px;padding:8px 12px;font-size:12px">Chargement…</div>
         <div class="btn-row" style="margin-bottom:10px">
@@ -210,36 +106,152 @@ export class SettingsPanel {
         </div>
         <label class="label-row" style="display:block;margin-top:6px">
           <input type="checkbox" data-field="alertTrains" ${s.alerts?.trainAlerts !== false ? 'checked' : ''}>
-          Alertes perturbations IDFM (lignes J, RER A)
+          Alertes perturbations IDFM (J, RER A)
         </label>
         <label class="label-row" style="display:block">
           <input type="checkbox" data-field="alertBrief" ${s.alerts?.morningBrief !== false ? 'checked' : ''}>
-          Notification du brief matinal (7h)
+          Brief matinal (7h)
         </label>
         <label class="label-row" style="display:block">
           <input type="checkbox" data-field="alertHealth" ${s.alerts?.healthReminder ? 'checked' : ''}>
           Rappel Suivi santé soir (23h)
         </label>
-      </div>
+      `)}
 
-      <div class="settings-section">
-        <div class="settings-section__title">Sauvegarde cloud (chiffrée)</div>
+      ${this.groupLabel('Services')}
+
+      ${this.section('idfm', 'Trains — clé IDFM', s.idfm.apiKey ? ok('configurée') : dim('manquante'), `
         <div class="settings-section__desc">
-          Sauvegarde end-to-end chiffrée sur Cloudflare. Sans la passphrase,
-          les données sont irrécupérables — note-la dans 1Password.
+          Inscription gratuite sur <a href="https://prim.iledefrance-mobilites.fr/" target="_blank" rel="noopener">prim.iledefrance-mobilites.fr</a>.
+        </div>
+        <input class="input" type="password" placeholder="apikey IDFM…" data-field="idfmKey" value="${escapeHTML(s.idfm.apiKey)}">
+      `)}
+
+      ${this.section('calendar', 'Agenda Google', s.calendar?.token ? ok('connecté') : (s.calendar?.clientId ? dim('non connecté') : dim('non configuré')), `
+        <div class="settings-section__desc">
+          Projet sur <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a> →
+          API Calendar → OAuth Client ID « Application Web » avec l'origine <code>${escapeHTML(location.origin)}</code>.
+        </div>
+        <input class="input" type="text" placeholder="OAuth Client ID Google" data-field="calendarClientId" value="${escapeHTML(s.calendar?.clientId || '')}">
+        <input class="input" type="text" placeholder="ID du calendrier (défaut : primary)" data-field="calendarId" value="${escapeHTML(s.calendar?.calendarId || 'primary')}">
+        ${s.calendar?.token ? `<div class="settings-info">✓ Connecté · <button class="link-btn" type="button" data-action="cal-disconnect">se déconnecter</button></div>` : ''}
+      `)}
+
+      ${this.section('llm', 'Assistant IA', s.llm?.enabled && s.llm?.apiKey ? ok(s.llm.model || 'activé') : dim('désactivé'), `
+        <div class="settings-section__desc">
+          Endpoint compatible OpenAI ou Anthropic, via ton Worker.
+          Azure Foundry Anthropic : URL <code>…/anthropic/v1/messages?api-version=…</code>, format Anthropic, auth api-key.
+        </div>
+        <input class="input" type="url" placeholder="https://…/v1/messages ou /chat/completions" data-field="llmEndpoint" value="${escapeHTML(s.llm?.endpoint || '')}" autocomplete="off" spellcheck="false">
+        <input class="input" type="password" placeholder="API key" data-field="llmApiKey" value="${escapeHTML(s.llm?.apiKey || '')}" autocomplete="off" spellcheck="false">
+        <input class="input" type="text" placeholder="Modèle (ex. claude-sonnet-4-5)" data-field="llmModel" value="${escapeHTML(s.llm?.model || '')}" autocomplete="off">
+        <div class="settings-2col">
+          <select class="input" data-field="llmFormat">
+            <option value="openai"    ${(s.llm?.format || 'openai') === 'openai' ? 'selected' : ''}>OpenAI</option>
+            <option value="anthropic" ${s.llm?.format === 'anthropic' ? 'selected' : ''}>Anthropic</option>
+          </select>
+          <select class="input" data-field="llmAuthStyle">
+            <option value="bearer" ${s.llm?.authStyle !== 'azure' ? 'selected' : ''}>Bearer</option>
+            <option value="azure"  ${s.llm?.authStyle === 'azure' ? 'selected' : ''}>api-key (Azure)</option>
+          </select>
+        </div>
+        <label class="label-row" style="display:block;margin-top:10px">
+          <input type="checkbox" data-field="llmEnabled" ${s.llm?.enabled ? 'checked' : ''}>
+          Activer l'assistant
+        </label>
+        <div class="btn-row" style="margin-top:10px">
+          <button class="btn btn--ghost" type="button" data-action="llm-ping">Tester</button>
+          <span class="settings-info" data-llm-status style="margin:0;padding:8px 12px;font-size:12px"></span>
+        </div>
+      `)}
+
+      ${this.groupLabel('Veille')}
+
+      ${this.section('rss', 'Sources articles', dim(`${rssOn} active${rssOn > 1 ? 's' : ''} / ${s.aiSources.length}`), `
+        <div class="crud-list crud-list--compact">
+          ${s.aiSources.map(src => `
+            <label class="crud-item crud-item--compact">
+              <input type="checkbox" data-toggle-ai="${src.id}" ${src.enabled ? 'checked' : ''}>
+              <span class="crud-item__name">${escapeHTML(src.name)}${src.lang === 'fr' ? ' <small class="crud-item__lang">FR</small>' : ''}</span>
+              <button class="crud-item__action" data-remove-ai="${src.id}" type="button" aria-label="Supprimer ${escapeHTML(src.name)}">×</button>
+            </label>
+          `).join('')}
+        </div>
+        <div class="btn-row" style="margin-top:10px">
+          <input class="input" type="text" placeholder="Nom" data-new-ai-name style="flex:1;margin:0">
+          <input class="input" type="url" placeholder="URL RSS" data-new-ai-url style="flex:2;margin:0">
+          <button class="btn btn--ghost" type="button" data-action="add-ai">Ajouter</button>
+        </div>
+      `)}
+
+      ${this.section('youtube', 'Chaînes YouTube', dim(`${ytOn} active${ytOn > 1 ? 's' : ''} / ${(s.youtube?.channels || []).length}`), `
+        <div class="crud-list crud-list--compact">
+          ${(s.youtube?.channels || []).map(c => `
+            <label class="crud-item crud-item--compact">
+              <input type="checkbox" data-toggle-yt="${c.id}" ${c.enabled ? 'checked' : ''}>
+              <span class="crud-item__name">${escapeHTML(c.name)}${c.lang === 'fr' ? ' <small class="crud-item__lang">FR</small>' : ''}</span>
+              <button class="crud-item__action" data-remove-yt="${c.id}" type="button" aria-label="Supprimer ${escapeHTML(c.name)}">×</button>
+            </label>
+          `).join('')}
+        </div>
+        <div class="settings-section__desc" style="margin-top:10px">Channel ID : commence par <code>UC</code>, visible dans le code source de la chaîne.</div>
+        <div class="btn-row">
+          <input class="input" type="text" placeholder="Nom" data-new-yt-name style="flex:1;margin:0">
+          <input class="input" type="text" placeholder="UC…" data-new-yt-id style="flex:1;margin:0">
+          <select class="input" data-new-yt-lang style="flex:0 0 72px;margin:0">
+            <option value="en">EN</option>
+            <option value="fr">FR</option>
+          </select>
+          <button class="btn btn--ghost" type="button" data-action="add-yt">Ajouter</button>
+        </div>
+      `)}
+
+      ${this.groupLabel('Widgets')}
+
+      ${this.section('bins', 'Encombrants', s.encombrants?.address ? dim(s.encombrants.address) : dim('—'), `
+        <input class="input" type="text" placeholder="Adresse" data-field="encombrantsAddress" value="${escapeHTML(s.encombrants?.address || '')}">
+        <select class="input" data-field="encombrantsPattern">
+          ${Object.entries(ENCOMBRANTS_PATTERNS).map(([key, p]) => `
+            <option value="${key}" ${s.encombrants?.pattern === key ? 'selected' : ''}>${escapeHTML(p.label)}</option>
+          `).join('')}
+        </select>
+        <label class="label-row" style="display:block;margin-top:12px">Dates exceptionnelles</label>
+        <div class="crud-list crud-list--compact">
+          ${(s.encombrants?.extraDates || []).map(d => `
+            <div class="crud-item crud-item--compact">
+              <span class="crud-item__name">${escapeHTML(new Date(d).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }))}</span>
+              <button class="crud-item__action" data-remove-bin="${escapeHTML(d)}" type="button" aria-label="Supprimer">×</button>
+            </div>
+          `).join('') || '<div class="card__empty" style="padding:4px 0">Aucune date.</div>'}
+        </div>
+        <div class="btn-row" style="margin-top:8px">
+          <input class="input" type="date" data-new-bin-date style="flex:1;margin:0">
+          <button class="btn btn--ghost" type="button" data-action="add-bin">Ajouter</button>
+        </div>
+      `)}
+
+      ${this.section('gas', 'Stations essence', dim(`${s.gas.radiusKm} km`), `
+        <label class="label-row" style="display:block">Rayon de recherche (km)</label>
+        <input class="input" type="number" min="1" max="50" data-field="gasRadius" value="${s.gas.radiusKm}">
+      `)}
+
+      ${this.groupLabel('Données')}
+
+      ${this.section('sync', 'Sauvegarde cloud', isSyncEnabled() ? ok('activée') : dim('inactive'), `
+        <div class="settings-section__desc">
+          Chiffrée end-to-end sur Cloudflare. Sans la passphrase, les données sont irrécupérables.
         </div>
         ${this.renderSyncBlock()}
-      </div>
+      `)}
 
-      <div class="settings-section">
-        <div class="settings-section__title">Sauvegarde locale</div>
+      ${this.section('local', 'Export local', dim('JSON'), `
         <div class="btn-row">
           <button class="btn btn--ghost" type="button" data-action="export">Exporter JSON</button>
           <button class="btn btn--ghost" type="button" data-action="import">Importer JSON</button>
           <button class="btn btn--danger" type="button" data-action="reset">Réinitialiser</button>
         </div>
         <input type="file" accept=".json,application/json" data-import-file style="display:none">
-      </div>
+      `)}
     `;
 
     this.attach();
@@ -283,6 +295,27 @@ export class SettingsPanel {
     });
 
     this.root.addEventListener('click', async (e) => {
+      // Accordion toggle — flip the DOM in place, no re-render (a re-render
+      // would lose input focus mid-typing in another section).
+      const accHead = e.target.closest('[data-acc-head]');
+      if (accHead) {
+        e.preventDefault();
+        const id = accHead.dataset.accHead;
+        const acc = accHead.closest('.acc');
+        const body = acc?.querySelector('.acc__body');
+        if (!acc || !body) return;
+        if (this.open.has(id)) {
+          this.open.delete(id);
+          acc.classList.remove('acc--open');
+          body.hidden = true;
+        } else {
+          this.open.add(id);
+          acc.classList.add('acc--open');
+          body.hidden = false;
+        }
+        return;
+      }
+
       const themeBtn = e.target.closest('[data-theme]');
       if (themeBtn) {
         getSettings().theme = themeBtn.dataset.theme;
@@ -409,22 +442,24 @@ export class SettingsPanel {
         }
         return;
       }
+      // preventDefault: the remove buttons sit inside <label> rows — without
+      // it the label activation would also toggle the row's checkbox.
       const removeAiId = e.target.closest('[data-remove-ai]')?.dataset.removeAi;
-      if (removeAiId) { removeAiSource(removeAiId); this.render(); this.onChange(); return; }
+      if (removeAiId) { e.preventDefault(); removeAiSource(removeAiId); this.render(); this.onChange(); return; }
 
       const removeYtId = e.target.closest('[data-remove-yt]')?.dataset.removeYt;
-      if (removeYtId) { removeYoutubeChannel(removeYtId); this.render(); this.onChange(); return; }
+      if (removeYtId) { e.preventDefault(); removeYoutubeChannel(removeYtId); this.render(); this.onChange(); return; }
 
       const removeBinDate = e.target.closest('[data-remove-bin]')?.dataset.removeBin;
-      if (removeBinDate) { removeEncombrantDate(removeBinDate); this.render(); this.onChange(); return; }
+      if (removeBinDate) { e.preventDefault(); removeEncombrantDate(removeBinDate); this.render(); this.onChange(); return; }
     });
 
     this.root.addEventListener('change', (e) => {
       const tgl = e.target.closest('[data-toggle-ai]');
-      if (tgl) { toggleAiSource(tgl.dataset.toggleAi); this.onChange(); return; }
+      if (tgl) { toggleAiSource(tgl.dataset.toggleAi); this.updateCounts(); this.onChange(); return; }
 
       const ytTgl = e.target.closest('[data-toggle-yt]');
-      if (ytTgl) { toggleYoutubeChannel(ytTgl.dataset.toggleYt); this.onChange(); return; }
+      if (ytTgl) { toggleYoutubeChannel(ytTgl.dataset.toggleYt); this.updateCounts(); this.onChange(); return; }
 
       const file = e.target.closest('[data-import-file]');
       if (file && file.files[0]) {

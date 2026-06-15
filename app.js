@@ -444,9 +444,11 @@ function refreshProjectStats() {
     const raw = localStorage.getItem('health-tracker-v1');
     const data = raw ? JSON.parse(raw) : null;
     const entries = data?.entries || {};
+    const events = Array.isArray(data?.events) ? data.events : [];
     const days = Object.keys(entries);
     const totalSlots = days.reduce((sum, d) => sum + Object.keys(entries[d] || {}).length, 0);
-    if (days.length === 0) {
+    const total = totalSlots + events.length;
+    if (total === 0) {
       setStat('health', 'Aucune entrée', null);
     } else {
       const [sy, sm, sd] = (data?.startDate || '2026-05-14').split('-').map(Number);
@@ -457,7 +459,7 @@ function refreshProjectStats() {
       const label = dayN <= totalPeriod
         ? `Jour ${dayN} / ${totalPeriod}`
         : `J+${dayN - totalPeriod} post-traitement`;
-      setStat('health', label, `${totalSlots} entrées`);
+      setStat('health', label, `${total} entrées`);
     }
   } catch { setStat('health', 'Aucune entrée', null); }
 
@@ -497,12 +499,17 @@ async function openHealthInsights(scope) {
   body.innerHTML = '<p class="insights-panel__placeholder">Lecture du journal…</p>';
 
   let entries = {};
+  let events = [];
   try {
     const raw = localStorage.getItem('health-tracker-v1');
-    if (raw) entries = (JSON.parse(raw)?.entries) || {};
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      entries = parsed?.entries || {};
+      events = Array.isArray(parsed?.events) ? parsed.events : [];
+    }
   } catch {}
 
-  if (!Object.keys(entries).length) {
+  if (!Object.keys(entries).length && !events.length) {
     body.innerHTML = '<p class="insights-panel__placeholder">Aucune entrée à analyser pour l\'instant.</p>';
     return;
   }
@@ -512,6 +519,7 @@ async function openHealthInsights(scope) {
   try {
     await analyzeHealth({
       entries,
+      events,
       onChunk: (delta) => {
         acc += delta;
         body.innerHTML = tinyMarkdown(acc);

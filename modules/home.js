@@ -107,8 +107,10 @@ function getProjectStats() {
     const raw = localStorage.getItem('health-tracker-v1');
     const data = raw ? JSON.parse(raw) : null;
     const entries = data?.entries || {};
+    const events = Array.isArray(data?.events) ? data.events : [];
     const days = Object.keys(entries);
-    if (days.length === 0) {
+    const total = days.reduce((s, d) => s + Object.keys(entries[d] || {}).length, 0) + events.length;
+    if (total === 0) {
       out.health = { label: 'Suivi santé', sub: 'Aucune entrée', accent: 'p-health' };
     } else {
       // Parse as LOCAL midnight — new Date('YYYY-MM-DD') is UTC midnight and
@@ -117,7 +119,6 @@ function getProjectStats() {
       const startDate = new Date(sy, sm - 1, sd);
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const dayN = Math.max(1, Math.floor((today - startDate) / 86400000) + 1);
-      const total = days.reduce((s, d) => s + Object.keys(entries[d] || {}).length, 0);
       const phase = dayN <= 31 ? `Jour ${dayN} / 31` : `J+${dayN - 31} post-traitement`;
       out.health = { label: 'Suivi santé', sub: `${phase} · ${total} entrées`, accent: 'p-health' };
     }

@@ -59,10 +59,15 @@ function unifiedEvents(entries, events) {
   for (const ev of (events || [])) {
     const t = ev.ts;
     if (!t) continue;
-    if (ev.type === 'etat') out.push({ t, kind: 'etat', note: ev.note, douleur: ev.douleur || 0, stress: ev.stress || 0, src: 'ev' });
-    else if (ev.type === 'crise') out.push({ t, kind: 'crise', intensity: ev.intensity || 0, loperamide: !!ev.loperamide, src: 'ev' });
-    else if (ev.type === 'wc') out.push({ t, kind: 'wc', bristol: ev.bristol || 0, src: 'ev' });
-    else if (ev.type === 'repas') out.push({ t, kind: 'repas', size: ev.size || '', tags: ev.tags || [], src: 'ev' });
+    if (ev.type === 'etat') out.push({ t, kind: 'etat', note: ev.note, douleur: ev.douleur || 0, stress: ev.stress || 0, comment: ev.comment || '', src: 'ev' });
+    else if (ev.type === 'crise') out.push({ t, kind: 'crise', intensity: ev.intensity || 0, loperamide: !!ev.loperamide, comment: ev.comment || '', src: 'ev' });
+    else if (ev.type === 'wc') out.push({ t, kind: 'wc', bristol: ev.bristol || 0, comment: ev.comment || '', src: 'ev' });
+    else if (ev.type === 'repas') out.push({ t, kind: 'repas', size: ev.size || '', tags: ev.tags || [], comment: ev.comment || '', src: 'ev' });
+    // état captured inside a non-état event → emit an extra état point so it
+    // feeds the mood trend and stats.
+    if (ev.type !== 'etat' && typeof ev.note === 'number' && ev.note > 0) {
+      out.push({ t, kind: 'etat', note: ev.note, douleur: 0, stress: 0, src: 'ev-embed' });
+    }
   }
   out.sort((a, b) => a.t - b.t);
   return out;
@@ -198,12 +203,13 @@ function journal(U) {
   const clock = t => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   const lines = [];
   for (const k of Object.keys(byDay).sort()) {
-    const bits = byDay[k].map(e => {
+    const bits = byDay[k].filter(e => e.src !== 'ev-embed').map(e => {
       const hm = clock(e.t);
-      if (e.kind === 'etat') return `${hm} état${e.note}${e.douleur ? ' dlr' + e.douleur : ''}${e.stress ? ' str' + e.stress : ''}`;
-      if (e.kind === 'repas') return `${hm} repas:${e.size || '?'}${(e.tags || []).length ? '[' + e.tags.join(',') + ']' : ''}`;
-      if (e.kind === 'wc') return `${hm} wcB${e.bristol}`;
-      if (e.kind === 'crise') return `${hm} crise${e.intensity}${e.loperamide ? '(lop)' : ''}`;
+      const note = e.comment ? ` «${e.comment.slice(0, 50)}»` : '';
+      if (e.kind === 'etat') return `${hm} état${e.note}${e.douleur ? ' dlr' + e.douleur : ''}${e.stress ? ' str' + e.stress : ''}${note}`;
+      if (e.kind === 'repas') return `${hm} repas:${e.size || '?'}${(e.tags || []).length ? '[' + e.tags.join(',') + ']' : ''}${note}`;
+      if (e.kind === 'wc') return `${hm} wcB${e.bristol}${note}`;
+      if (e.kind === 'crise') return `${hm} crise${e.intensity}${e.loperamide ? '(lop)' : ''}${note}`;
       return '';
     });
     lines.push(`${k} → ${bits.join(' | ')}`);

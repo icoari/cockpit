@@ -3,9 +3,31 @@ main = "src/index.js"
 compatibility_date = "2026-05-01"
 workers_dev = true
 
+# Paid plan: run the Worker close to the services it talks to (Azure LLM,
+# IDFM) instead of always at the edge nearest the user.
+[placement]
+mode = "smart"
+
+# Paid plan: raise the CPU ceiling well above the 10 ms free tier so embedding
+# batches and Whisper post-processing have room.
+[limits]
+cpu_ms = 60000
+
+[observability]
+enabled = true
+
 [[kv_namespaces]]
 binding = "KV"
 id = "317a9f34cb9d4c1fb377e116cbb8cbed"
+
+# Workers AI — Whisper (speech-to-text) + bge-m3 (embeddings).
+[ai]
+binding = "AI"
+
+# Vectorize — semantic memory index (1024-dim, cosine).
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "bob-memory"
 
 [vars]
 VAPID_PUBLIC_KEY = "BFAFeTqjyY9y1FTcPcWtFHfARz4hUkXCBa9iqFePsaX0MhCiHTsXlazm65CbqIbL2EBl5qRw_tRMzdueTwsXd9o"

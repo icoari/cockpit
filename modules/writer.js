@@ -2,6 +2,7 @@ import { ICONS } from './icons.js';
 import { escapeHTML, haptic, uid, debounce } from './util.js';
 import { streamCopilot } from './copilot.js';
 import { isConfigured as llmConfigured } from './llm.js';
+import { VoiceRecorder, voiceSupported } from './voice.js';
 
 const KEY = 'bob-writer-v1';
 
@@ -34,7 +35,7 @@ function timeAgo(date) {
 }
 
 export class WriterApp {
-  constructor(container, { onExit } = {}) {
+  constructor(container, { onExit, openChapterId } = {}) {
     this.container = container;
     this.onExit = onExit || (() => {});
     this.state = load();
@@ -44,7 +45,13 @@ export class WriterApp {
     // Single persistent delegated click handler — survives every re-render
     this.container.addEventListener('click', (e) => this.handleClick(e));
 
-    this.renderList();
+    // Deep link from Mémoire — open straight into a chapter if it still exists.
+    if (openChapterId && this.state.chapters.some(c => c.id === openChapterId)) {
+      this.currentChapterId = openChapterId;
+      this.renderEditor();
+    } else {
+      this.renderList();
+    }
   }
 
   save() { persist(this.state); }
@@ -147,6 +154,7 @@ export class WriterApp {
         <div class="writer-edit">
           <input class="writer-edit__title" type="text" data-title value="${escapeHTML(c.title)}" placeholder="Titre du chapitre">
           <div class="writer-copilot" data-copilot>
+            ${voiceSupported() ? `<button class="writer-copilot__btn writer-copilot__btn--mic" type="button" data-mic aria-label="Dicter">${ICONS.mic}<span data-mic-label>Dicter</span></button>` : ''}
             <button class="writer-copilot__btn" type="button" data-task="continue">Continuer</button>
             <button class="writer-copilot__btn" type="button" data-task="expand">Élargir</button>
             <button class="writer-copilot__btn" type="button" data-task="deepen">Approfondir</button>
@@ -188,6 +196,13 @@ export class WriterApp {
 
     // Copilot toolbar
     this.container.querySelector('[data-copilot]').addEventListener('click', async (e) => {
+      const micBtn = e.target.closest('[data-mic]');
+      if (micBtn) {
+        e.stopPropagation();
+        haptic(4);
+        await this.toggleDictation(micBtn, contentEl, statusEl, adjust, onChange);
+        return;
+      }
       const btn = e.target.closest('[data-task]');
       if (!btn) return;
       e.stopPropagation();
@@ -199,6 +214,57 @@ export class WriterApp {
       const task = btn.dataset.task;
       await this.runCopilotTask(task, contentEl, statusEl, btn, adjust, onChange);
     });
+  }
+
+  // Dictation: first tap starts recording, second tap stops and transcribes
+  // the clip via Whisper (Workers AI), inserting the text at the cursor.
+  async toggleDictation(btn, contentEl, statusEl, adjust, onChange) {
+    const label = btn.querySelector('[data-mic-label]');
+    // ----- stop & transcribe -----
+    if (this.recorder) {
+      const rec = this.recorder;
+      this.recorder = null;
+      btn.classList.remove('writer-copilot__btn--recording');
+      if (label) label.textContent = 'Dicter';
+      btn.disabled = true;
+      statusEl.textContent = 'Transcription…';
+      try {
+        const text = await rec.stopAndTranscribe();
+        if (text) {
+          const pos = contentEl.selectionStart ?? contentEl.value.length;
+          const before = contentEl.value.slice(0, pos);
+          const after = contentEl.value.slice(pos);
+          const sep = before && !/\s$/.test(before) ? ' ' : '';
+          contentEl.value = before + sep + text + after;
+          const caret = (before + sep + text).length;
+          contentEl.setSelectionRange(caret, caret);
+          adjust();
+          onChange();
+          statusEl.textContent = '✓ ' + text.length + ' caractères dictés';
+        } else {
+          statusEl.textContent = 'Rien entendu.';
+        }
+      } catch (e) {
+        statusEl.textContent = 'Échec : ' + (e.message || e);
+      } finally {
+        btn.disabled = false;
+        setTimeout(() => { statusEl.textContent = ''; }, 4000);
+      }
+      return;
+    }
+    // ----- start recording -----
+    if (this.copilotBusy) { statusEl.textContent = 'Une génération est en cours.'; return; }
+    try {
+      const rec = new VoiceRecorder();
+      await rec.start();
+      this.recorder = rec;
+      btn.classList.add('writer-copilot__btn--recording');
+      if (label) label.textContent = 'Stop';
+      statusEl.textContent = 'Enregistrement… (re-tape pour arrêter)';
+    } catch (e) {
+      statusEl.textContent = 'Micro refusé : ' + (e.message || e);
+      setTimeout(() => { statusEl.textContent = ''; }, 4000);
+    }
   }
 
   async runCopilotTask(task, contentEl, statusEl, btn, adjust, onChange) {

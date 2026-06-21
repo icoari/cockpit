@@ -18,6 +18,7 @@ import { ProWidget } from './modules/pro.js';
 import { analyzeHealth } from './modules/insights.js';
 import { pushMonitoring } from './modules/notifications.js';
 import { TrackersWidget } from './modules/trackers.js';
+import { searchMemory, reindexMemory, lastIndexedAt } from './modules/memory.js';
 
 // ---------- Theme ----------
 function applyTheme() {
@@ -281,7 +282,7 @@ window.matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', 
 });
 
 // ---------- Projets overlay ----------
-function openProject(name) {
+function openProject(name, opts = {}) {
   const overlay = document.getElementById('projectOverlay');
   const inner = document.getElementById('projectOverlayInner');
   if (!overlay || !inner) return;
@@ -331,9 +332,41 @@ function openProject(name) {
 
   if (name === 'writer') {
     inner.innerHTML = `<div class="project-shell project-shell--writer" id="writerHost"></div>`;
-    new WriterApp(document.getElementById('writerHost'), { onExit: close });
+    new WriterApp(document.getElementById('writerHost'), { onExit: close, openChapterId: opts.openChapterId });
     overlay.hidden = false;
     document.body.classList.add('project-open');
+    return;
+  }
+
+  if (name === 'memory') {
+    inner.innerHTML = `
+      <div class="project-shell">
+        <div class="project-bar">
+          <button class="project-bar__back" type="button" data-close>← Bob</button>
+          <span class="project-bar__title">Mémoire</span>
+          <button class="project-bar__action" type="button" data-action="reindex" aria-label="Ré-indexer">${ICONS.refresh}</button>
+        </div>
+        <div class="memory">
+          <div class="memory__search">
+            <span class="memory__search-icon" aria-hidden="true">${ICONS.search}</span>
+            <input class="memory__input" type="search" inputmode="search" enterkeyhint="search"
+                   placeholder="Cherche par le sens…" autocomplete="off" data-mem-input data-no-swipe>
+          </div>
+          <div class="memory__filters" data-mem-filters>
+            <button class="memory__chip memory__chip--active" type="button" data-mem-type="">Tout</button>
+            <button class="memory__chip" type="button" data-mem-type="chapter">Chapitres</button>
+            <button class="memory__chip" type="button" data-mem-type="health">Journal</button>
+          </div>
+          <div class="memory__status" data-mem-status></div>
+          <div class="memory__results" data-mem-results></div>
+        </div>
+      </div>
+    `;
+    inner.querySelector('[data-close]').addEventListener('click', close);
+    overlay.hidden = false;
+    document.body.classList.add('project-open');
+    initMemory(inner, close);
+    setTimeout(() => inner.querySelector('[data-mem-input]')?.focus(), 280);
     return;
   }
 
@@ -478,6 +511,101 @@ function refreshProjectStats() {
   } catch { setStat('writer', 'Aucun chapitre', null); }
 
   // BEIUE is a launcher — no live stats
+}
+
+// ---------- Mémoire (semantic search) ----------
+function initMemory(scope, close) {
+  const input = scope.querySelector('[data-mem-input]');
+  const statusEl = scope.querySelector('[data-mem-status]');
+  const resultsEl = scope.querySelector('[data-mem-results]');
+  const filters = scope.querySelector('[data-mem-filters]');
+  let activeType = '';
+  let lastQuery = '';
+  let searchToken = 0;
+
+  const typeLabel = { chapter: 'Chapitre', health: 'Journal' };
+
+  const render = (results) => {
+    if (!results.length) {
+      resultsEl.innerHTML = '<div class="memory__empty">Aucun passage proche. Reformule, ou ré-indexe (↻) si tu viens d\'écrire.</div>';
+      return;
+    }
+    resultsEl.innerHTML = results.map(r => `
+      <button class="memory-hit" type="button" data-hit-type="${r.type}" data-hit-ref="${escapeHTML(r.ref || '')}">
+        <div class="memory-hit__head">
+          <span class="memory-hit__kind memory-hit__kind--${r.type}">${typeLabel[r.type] || 'Note'}</span>
+          ${r.title ? `<span class="memory-hit__title">${escapeHTML(r.title)}</span>` : ''}
+          ${r.dateLabel ? `<span class="memory-hit__date">${escapeHTML(r.dateLabel)}</span>` : ''}
+          <span class="memory-hit__score">${Math.round(r.score * 100)}%</span>
+        </div>
+        <div class="memory-hit__snippet">${escapeHTML(r.snippet)}</div>
+      </button>
+    `).join('');
+  };
+
+  const run = async () => {
+    const q = input.value.trim();
+    lastQuery = q;
+    if (q.length < 2) { resultsEl.innerHTML = ''; statusEl.textContent = ''; return; }
+    const mine = ++searchToken;
+    statusEl.textContent = 'Recherche…';
+    try {
+      const results = await searchMemory(q, activeType || undefined);
+      if (mine !== searchToken) return;   // a newer search superseded this one
+      statusEl.textContent = results.length ? `${results.length} passage${results.length > 1 ? 's' : ''}` : '';
+      render(results);
+    } catch (e) {
+      if (mine !== searchToken) return;
+      statusEl.textContent = 'Erreur : ' + (e.message || e);
+    }
+  };
+
+  const runDebounced = (() => {
+    let t = null;
+    return () => { clearTimeout(t); t = setTimeout(run, 350); };
+  })();
+
+  input.addEventListener('input', runDebounced);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); run(); } });
+
+  filters.addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-mem-type]');
+    if (!chip) return;
+    haptic(4);
+    activeType = chip.dataset.memType;
+    filters.querySelectorAll('.memory__chip').forEach(c =>
+      c.classList.toggle('memory__chip--active', c === chip));
+    if (lastQuery) run();
+  });
+
+  resultsEl.addEventListener('click', (e) => {
+    const hit = e.target.closest('[data-hit-type]');
+    if (!hit) return;
+    haptic(6);
+    const type = hit.dataset.hitType;
+    const ref = hit.dataset.hitRef;
+    close();
+    if (type === 'chapter') openProject('writer', { openChapterId: ref });
+    else if (type === 'health') openProject('health');
+  });
+
+  // Reindex on open (background) so freshly-written text is searchable, and
+  // on the manual ↻ button.
+  const doReindex = async (manual) => {
+    statusEl.textContent = manual ? 'Indexation…' : statusEl.textContent;
+    try {
+      const n = await reindexMemory();
+      if (manual) {
+        statusEl.textContent = `Indexé · ${n} passages`;
+        setTimeout(() => { if (!lastQuery) statusEl.textContent = ''; }, 2500);
+      }
+    } catch (e) {
+      if (manual) statusEl.textContent = 'Indexation échouée : ' + (e.message || e);
+    }
+  };
+  scope.querySelector('[data-action="reindex"]').addEventListener('click', () => { haptic(4); doReindex(true); });
+  // Auto-reindex if it's been a while (or never).
+  if (Date.now() - lastIndexedAt() > 5 * 60 * 1000) doReindex(false);
 }
 
 // ---------- Health insights panel (lives inside the Suivi santé project shell) ----------

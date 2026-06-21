@@ -8,6 +8,9 @@
 //   0 21 * * *       health-tracker evening reminder (23h Paris summer)
 
 import { sendWebPush } from './webpush.js';
+import {
+  handleTranscribe, handleMemoryIndex, handleMemorySearch, handleMemoryForget,
+} from './ai.js';
 
 const KV_PREFIX = 'bobsync:';
 const KEY_SALT = KV_PREFIX + 'salt';
@@ -69,6 +72,12 @@ export default {
 
       if (p === '/llm')                 return assertMethod(request, 'POST', () => handleLlm(request, env));
 
+      // Workers AI (paid plan) — all auth-gated like the LLM proxy.
+      if (p === '/transcribe')          return assertMethod(request, 'POST', () => authed(request, env, () => handleTranscribe(request, env, json)));
+      if (p === '/memory/index')        return assertMethod(request, 'POST', () => authed(request, env, () => handleMemoryIndex(request, env, json)));
+      if (p === '/memory/search')       return assertMethod(request, 'POST', () => authed(request, env, () => handleMemorySearch(request, env, json)));
+      if (p === '/memory/forget')       return assertMethod(request, 'DELETE', () => authed(request, env, () => handleMemoryForget(request, env, json)));
+
       return json({ error: 'not found' }, 404);
     } catch (err) {
       return json({ error: err.message || 'internal error' }, 500);
@@ -113,6 +122,12 @@ function json(body, status = 200, extraHeaders = {}) {
 
 async function assertMethod(request, method, fn) {
   if (request.method !== method) return json({ error: `${method} only` }, 405);
+  return fn();
+}
+
+// Guard a handler behind the sync token — used by the Workers AI endpoints.
+async function authed(request, env, fn) {
+  if (!await verifyAuth(request, env)) return json({ error: 'unauthorized' }, 401);
   return fn();
 }
 

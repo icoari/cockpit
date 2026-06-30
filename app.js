@@ -327,7 +327,7 @@ function openProject(name, opts = {}) {
           <span class="project-bar__title">Suivi santé</span>
           <button class="project-bar__action" type="button" data-action="analyze" aria-label="Analyse">${ICONS.lightbulb}</button>
         </div>
-        <iframe class="project-frame" src="../health-tracker/?theme=${encodeURIComponent(currentTheme)}${doseParam}&_v=${cacheBust}" allow="vibrate"></iframe>
+        <iframe class="project-frame" src="../health-tracker/?theme=${encodeURIComponent(currentTheme)}${doseParam}&_v=${cacheBust}" allow="microphone; vibrate"></iframe>
         <div class="insights-overlay" hidden data-insights-overlay>
           <div class="insights-panel">
             <div class="insights-panel__head">

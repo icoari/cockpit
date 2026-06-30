@@ -50,22 +50,25 @@ function weatherLabelFromCode(c) {
 }
 
 async function fetchWeather() {
-  const cached = cacheGet('home_weather', 30 * 60 * 1000);
+  const cached = cacheGet('home_weather2', 30 * 60 * 1000);
   if (cached) return cached;
   const loc = getSettings().location || {};
   if (!loc.lat || !loc.lon) return null;
   try {
     const r = await fetchWithTimeout(
-      `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,weather_code&timezone=auto`,
+      `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto`,
       {}, 4000,
     );
     if (!r.ok) return null;
     const d = await r.json();
+    const num = (v) => (Number.isFinite(v) ? Math.round(v) : null);
     const out = {
       temp: Math.round(d.current?.temperature_2m ?? 0),
       code: d.current?.weather_code ?? 0,
+      tMax: num(d.daily?.temperature_2m_max?.[0]),
+      tMin: num(d.daily?.temperature_2m_min?.[0]),
     };
-    cacheSet('home_weather', out);
+    cacheSet('home_weather2', out);
     return out;
   } catch { return null; }
 }
@@ -297,11 +300,16 @@ export class HomeWidget {
     if (!el) return;
     const c = this.context;
 
-    const weatherTile = c.weather ? `
-      <button class="home-tile" type="button" data-goto="perso">
+    const w = c.weather;
+    const minmax = (w && w.tMin != null && w.tMax != null)
+      ? `<span class="home-weather__minmax"><span>↓&nbsp;${w.tMin}°</span><span>↑&nbsp;${w.tMax}°</span></span>`
+      : '';
+    const weatherTile = w ? `
+      <button class="home-tile home-tile--weather" type="button" data-goto="perso">
         <span class="home-tile__label">Météo</span>
-        <span class="home-tile__value">${c.weather.temp}°</span>
-        <span class="home-tile__sub">${escapeHTML(weatherLabelFromCode(c.weather.code))}</span>
+        <span class="home-weather__temp">${w.temp}°</span>
+        <span class="home-tile__sub">${escapeHTML(weatherLabelFromCode(w.code))}</span>
+        ${minmax}
       </button>` : '';
 
     el.innerHTML = weatherTile + this.transportTile(c.transport);

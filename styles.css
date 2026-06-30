@@ -380,6 +380,18 @@ body.theme-light .home-greeting::before {
   letter-spacing: -0.005em;
 }
 
+/* Weather tile — big current temp, condition, day's min/max pinned to bottom
+   so the content fills the tile instead of floating in a corner. */
+.home-tile--weather { gap: 2px; }
+.home-weather__temp {
+  font-size: 30px; font-weight: 700; letter-spacing: -0.02em;
+  color: var(--text); line-height: 1.05; font-variant-numeric: tabular-nums; margin-top: 2px;
+}
+.home-weather__minmax {
+  display: flex; gap: 12px; margin-top: auto; padding-top: 8px;
+  font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-dim);
+}
+
 /* Wide transport tile — next J + next RER for the location-based direction */
 .home-tile--wide { grid-column: span 2; }
 .home-trains { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }

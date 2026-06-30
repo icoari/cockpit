@@ -65,9 +65,12 @@ function getCalendarToday() {
   const end = new Date();   end.setHours(23, 59, 59, 999);
   const list = ev
     .map(e => {
+      const allDay = !!(e.start?.date && !e.start?.dateTime);
+      // All-day events carry a bare "YYYY-MM-DD" — parse as LOCAL midnight,
+      // not UTC (new Date('YYYY-MM-DD') is UTC → 02:00 here, the "à 02:00" bug).
       const startDt = e.start?.dateTime ? new Date(e.start.dateTime)
-                    : e.start?.date ? new Date(e.start.date) : null;
-      return startDt ? { start: startDt, title: e.summary || '' } : null;
+                    : e.start?.date ? new Date(e.start.date + 'T00:00:00') : null;
+      return startDt ? { start: startDt, title: e.summary || '', allDay } : null;
     })
     .filter(Boolean)
     .filter(x => x.start >= start && x.start <= end)
@@ -351,7 +354,7 @@ export class HomeWidget {
       label: 'Agenda',
       value: c.calendar.length === 0 ? 'libre' : `${c.calendar.length} RDV`,
       sub: nextEvent
-        ? `${nextEvent.start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · ${nextEvent.title.slice(0, 24)}`
+        ? `${nextEvent.allDay ? 'Journée' : nextEvent.start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · ${nextEvent.title.slice(0, 24)}`
         : 'rien aujourd\'hui',
       goto: 'perso',
     });
@@ -459,7 +462,7 @@ function buildGreetingPrompt(c) {
   lines.push(`Date : ${today}, ${moment} (${hh}h).`);
   if (c.weather) lines.push(`Météo : ${c.weather.temp}°C, ${weatherLabelFromCode(c.weather.code)}.`);
   if (c.calendar.length === 0) lines.push(`Agenda : aucun rendez-vous aujourd'hui.`);
-  else lines.push(`Agenda : ${c.calendar.length} RDV — ${c.calendar.map(e => `${e.start.getHours()}h${String(e.start.getMinutes()).padStart(2, '0')} ${e.title}`).slice(0, 4).join(', ')}.`);
+  else lines.push(`Agenda : ${c.calendar.length} RDV — ${c.calendar.map(e => `${e.allDay ? 'journée' : e.start.getHours() + 'h' + String(e.start.getMinutes()).padStart(2, '0')} ${e.title}`).slice(0, 4).join(', ')}.`);
   if (c.train) lines.push(`Train aller : ${c.train.cancelled ? 'supprimé' : `${c.train.time} (dans ${c.train.minUntil} min)`}.`);
   if (c.headlines.length) {
     lines.push(`Items en tête de file :`);

@@ -694,7 +694,7 @@ initSwipeNavigation();
 // Project cards on the Home page send a custom event — route it through openProject.
 document.addEventListener('bob-open-project', (e) => {
   const name = e.detail?.project;
-  if (name === 'health' || name === 'writer' || name === 'beiue') openProject(name);
+  if (name === 'health' || name === 'writer' || name === 'beiue' || name === 'memory') openProject(name);
 });
 
 // Home tiles navigate to their related tab.

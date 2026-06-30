@@ -293,9 +293,11 @@ Pour CHAQUE événement, extrais :
 - "title" : titre court et clair (ex. "Rando", "Soirée jeux", "Déjeuner famille", "Ciné avec Léna").
 - "category" : qui est impliqué → "lena" (avec Léna), "famille" (famille, parents, frère, sœur, cousins…), "pote" (amis, potes, sortie/soirée à plusieurs), sinon "perso" (seul ou par défaut).
 - "day" : "today" (défaut), "yesterday", "tomorrow", un jour de la semaine en anglais ("monday".."sunday"), ou une date "YYYY-MM-DD" si précisée.
-Règles : une phrase peut contenir plusieurs événements. N'invente rien.
+Règles :
+- Une phrase peut contenir plusieurs événements. N'invente rien.
+- Travail : si Nicolas parle d'aller au travail / au taf / au boulot / au bureau / bosser, alors title="YOUNITED" et category="perso" (rouge).
 Réponds UNIQUEMENT en JSON valide, sans texte ni Markdown :
-{"events":[{"title":"Rando","category":"lena","day":"today"}]}`;
+{"events":[{"title":"Rando","category":"lena","day":"today"},{"title":"YOUNITED","category":"perso","day":"tomorrow"}]}`;
 
 function addDaysLocal(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
 

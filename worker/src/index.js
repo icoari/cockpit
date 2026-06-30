@@ -2,7 +2,7 @@
 //
 // Cron schedule (UTC):
 //   */10 * * * *     feed aggregation
-//   */5 6-23 * * *   IDFM disruption watch
+//   */15 6-23 * * * IDFM disruption watch + medication reminders
 //   0 5 * * *        morning brief push (7h Paris summer)
 //   0 16 * * *       last-train-of-tonight check (18h Paris summer)
 //   0 21 * * *       health-tracker evening reminder (23h Paris summer)
@@ -98,7 +98,7 @@ export default {
     const cron = event.cron;
     if (cron === '*/10 * * * *') {
       ctx.waitUntil(aggregateFeed(env));
-    } else if (cron === '*/5 6-23 * * *') {
+    } else if (cron === '*/15 6-23 * * *') {
       ctx.waitUntil(checkDisruptions(env));
       ctx.waitUntil(checkMedicationReminders(env));
     } else if (cron === '0 5 * * *') {
@@ -661,7 +661,7 @@ async function sendHealthReminder(env) {
 }
 
 // Medication reminders — pushes at each meal time on ON-days only, once per
-// dose per day, and never for a dose already logged. Runs on the */5 6-23
+// dose per day, and never for a dose already logged. Runs on the */15 6-23
 // cron (5-min granularity is plenty for a "take it around now" nudge).
 async function checkMedicationReminders(env) {
   const traw = await env.KV.get(KEY_TREATMENT);
@@ -829,26 +829,34 @@ function lineMnemonic(lineId) {
   return 'Ligne';
 }
 
-// Permissive filter: surface any disruption with a user-facing message and
-// an application period that's active right now or starting within ~12 h.
-// Severity classifications from IDFM are inconsistent (planned engineering
-// works often land under REDUCED_SERVICE or just have no severity at all),
-// so we trust the human message and the time window.
-function isImpactful(d, withinHours = 12) {
+// Effects that warrant a push. INFORMATION / NO_EFFECT and the like are
+// deliberately excluded — they were the source of the notification flood.
+const IMPACTFUL_EFFECTS = new Set(['NO_SERVICE', 'REDUCED_SERVICE', 'SIGNIFICANT_DELAYS', 'DETOUR', 'MODIFIED_SERVICE']);
+const IMPACT_KEYWORDS = /supprim|interromp|ne circul|suspend|coupure|fortement perturb|trafic interrompu|ferm[ée]/i;
+
+// Strict filter: only surface disruptions that are active now (or within a few
+// hours) AND genuinely impactful — a strong severity effect, or, when IDFM
+// gives no effect, a message that clearly signals a real disruption.
+function isImpactful(d, withinHours = 6) {
   const text = (d.messages?.[0]?.text || '').trim();
   if (!text) return false;
 
+  // Active now or starting soon.
   const now = Date.now();
   const cutoff = now + withinHours * 3600 * 1000;
   const periods = d.application_periods || [];
-  if (periods.length === 0) return true;
-
+  let active = periods.length === 0;
   for (const p of periods) {
     const start = parseNavitiaDate(p.begin);
     const end   = parseNavitiaDate(p.end);
-    if ((!start || start <= cutoff) && (!end || end >= now)) return true;
+    if ((!start || start <= cutoff) && (!end || end >= now)) { active = true; break; }
   }
-  return false;
+  if (!active) return false;
+
+  const effect = (d.severity?.effect || '').toUpperCase();
+  if (IMPACTFUL_EFFECTS.has(effect)) return true;
+  if (!effect) return IMPACT_KEYWORDS.test(stripHtml(text));
+  return false;   // INFORMATION / NO_EFFECT / minor → no push
 }
 
 function compactDisruptionText(d) {

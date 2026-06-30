@@ -206,15 +206,15 @@ export class HomeWidget {
 
       <section class="home-section" data-section="quick">
         <div class="home-section__head"><span class="home-section__label">Accès rapide</span></div>
-        <div class="home-actions">
-          <button class="home-voice" type="button" data-home-voice>
-            <span class="home-voice__icon">${ICONS.mic}</span><span>Dicter ma santé</span>
+        <div class="home-quick">
+          <button class="home-quick__btn home-quick__btn--health" type="button" data-home-voice>
+            <span class="home-quick__icon">${ICONS.mic}</span><span class="home-quick__label">Dicter santé</span>
           </button>
-          <button class="home-voice home-voice--event" type="button" data-home-event>
-            <span class="home-voice__icon">${ICONS.mic}</span><span>Dicter un event</span>
+          <button class="home-quick__btn home-quick__btn--event" type="button" data-home-event>
+            <span class="home-quick__icon">${ICONS.mic}</span><span class="home-quick__label">Dicter event</span>
           </button>
-          <button class="home-voice home-voice--memory" type="button" data-home-memory>
-            <span class="home-voice__icon">${ICONS.brain}</span><span>Mémoire</span>
+          <button class="home-quick__btn home-quick__btn--memory" type="button" data-home-memory>
+            <span class="home-quick__icon">${ICONS.brain}</span><span class="home-quick__label">Mémoire</span>
           </button>
         </div>
       </section>

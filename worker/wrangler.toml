@@ -39,7 +39,7 @@ VAPID_SUBJECT    = "mailto:bob@icoari.dev"
 [triggers]
 crons = [
   "*/10 * * * *",    # feed aggregation
-  "*/5 6-23 * * *",  # IDFM disruption watch
+  "*/15 6-23 * * *",  # IDFM disruption watch + medication reminders
   "0 5 * * *",       # morning brief push (7h Paris summer / 6h winter)
   "0 16 * * *",      # last-train-of-tonight check (18h Paris summer / 17h winter)
   "0 21 * * *",      # health-tracker evening reminder (23h Paris summer)

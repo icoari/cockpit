@@ -2,6 +2,8 @@ import { getSettings, save } from './state.js';
 import { ICONS } from './icons.js';
 import { escapeHTML, haptic, fetchWithTimeout } from './util.js';
 import { WORKER_URL } from './sync.js';
+import { VoiceRecorder, voiceSupported } from './voice.js';
+import { complete } from './llm.js';
 
 // calendar.events scope = read + write events (no calendar settings changes).
 const SCOPE = 'https://www.googleapis.com/auth/calendar.events';
@@ -276,6 +278,58 @@ const GOOGLE_COLORS = {
 const DEFAULT_EVENT_COLOR = '#7FD1B9';
 const eventColor = (ev) => GOOGLE_COLORS[ev.colorId] || DEFAULT_EVENT_COLOR;
 
+// ---------- Voice dictation → events ----------
+// Nicolas's colour code: perso=rouge, pote=jaune, famille=bleu, Léna=flamant.
+const CAL_CATEGORIES = [
+  { id: 'perso',   label: 'Perso',   colorId: '11' },  // Tomate (rouge)
+  { id: 'pote',    label: 'Pote',    colorId: '5'  },  // Banane (jaune)
+  { id: 'famille', label: 'Famille', colorId: '7'  },  // Paon (bleu)
+  { id: 'lena',    label: 'Léna',    colorId: '4'  },  // Flamant (rose)
+];
+const catColorId = (cat) => (CAL_CATEGORIES.find(c => c.id === cat) || CAL_CATEGORIES[0]).colorId;
+
+const SYSTEM_CAL = `Tu convertis une phrase dictée par Nicolas en événements d'agenda (français).
+Pour CHAQUE événement, extrais :
+- "title" : titre court et clair (ex. "Rando", "Soirée jeux", "Déjeuner famille", "Ciné avec Léna").
+- "category" : qui est impliqué → "lena" (avec Léna), "famille" (famille, parents, frère, sœur, cousins…), "pote" (amis, potes, sortie/soirée à plusieurs), sinon "perso" (seul ou par défaut).
+- "day" : "today" (défaut), "yesterday", "tomorrow", un jour de la semaine en anglais ("monday".."sunday"), ou une date "YYYY-MM-DD" si précisée.
+Règles : une phrase peut contenir plusieurs événements. N'invente rien.
+Réponds UNIQUEMENT en JSON valide, sans texte ni Markdown :
+{"events":[{"title":"Rando","category":"lena","day":"today"}]}`;
+
+function addDaysLocal(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
+
+function dayToIso(day) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  if (!day || day === 'today') return toIso(today);
+  if (day === 'yesterday') return toIso(addDaysLocal(today, -1));
+  if (day === 'tomorrow') return toIso(addDaysLocal(today, 1));
+  if (/^\d{4}-\d{2}-\d{2}$/.test(day)) return day;
+  const wd = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].indexOf(String(day).toLowerCase());
+  if (wd >= 0) { const diff = (wd - today.getDay() + 7) % 7; return toIso(addDaysLocal(today, diff)); }
+  return toIso(today);
+}
+
+async function parseCalendarText(transcript) {
+  const text = await complete(
+    [{ role: 'system', content: SYSTEM_CAL }, { role: 'user', content: transcript }],
+    { temperature: 0, maxTokens: 700 },
+  );
+  let raw = (text || '').trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  const m = raw.match(/\{[\s\S]*\}/);
+  if (m) raw = m[0];
+  let obj;
+  try { obj = JSON.parse(raw); } catch { throw new Error('réponse IA illisible'); }
+  const list = Array.isArray(obj) ? obj : (Array.isArray(obj.events) ? obj.events : []);
+  return list
+    .map(e => {
+      if (!e || typeof e.title !== 'string' || !e.title.trim()) return null;
+      const cat = ['perso', 'pote', 'famille', 'lena'].includes(e.category) ? e.category : 'perso';
+      return { title: e.title.trim().slice(0, 120), date: dayToIso(e.day), colorId: catColorId(cat) };
+    })
+    .filter(Boolean);
+}
+
 // ---------- Widget ----------
 export class CalendarWidget {
   constructor(container) {
@@ -301,6 +355,7 @@ export class CalendarWidget {
           <span class="card__subtitle">chargement…</span>
         </div>
         <div class="card__actions">
+          ${voiceSupported() ? `<button class="card__action" data-action="voice" type="button" aria-label="Dicter des événements">${ICONS.mic}</button>` : ''}
           <button class="card__action" data-action="create" type="button" aria-label="Créer un événement">${ICONS.plus}</button>
           <button class="card__action" data-action="refresh" type="button" aria-label="Rafraîchir">${ICONS.refresh}</button>
         </div>
@@ -321,6 +376,12 @@ export class CalendarWidget {
         e.stopPropagation();
         haptic(6);
         this.toggleCreate();
+        return;
+      }
+      if (e.target.closest('[data-action="voice"]')) {
+        e.stopPropagation();
+        haptic(6);
+        this.enterVoiceMode();
         return;
       }
       if (e.target.closest('[data-action="signin"]')) {
@@ -453,6 +514,113 @@ export class CalendarWidget {
       this.setBody(`<div class="card__error">${escapeHTML(e.message || 'Échec de connexion')}</div>`);
       this.setSubtitle('erreur');
     }
+  }
+
+  // Voice dictation → events. Takes over the card body with its own little
+  // state machine; restores the calendar (this.refresh) when done/cancelled.
+  enterVoiceMode() {
+    if (!voiceSupported()) { this.setBody('<div class="card__error">Micro non disponible sur cet appareil.</div>'); return; }
+    const self = this;
+    let stage = 'idle', rec = null, parsed = [], transcript = '', msg = '';
+    const fail = (m) => { stage = 'error'; msg = m; draw(); };
+
+    async function start() {
+      try { rec = new VoiceRecorder(); await rec.start(); stage = 'recording'; draw(); }
+      catch (e) { stage = 'idle'; msg = 'Micro refusé — réessaie.'; draw(); }
+    }
+    async function stop() {
+      stage = 'working'; msg = 'Transcription…'; draw();
+      let text;
+      try { text = await rec.stopAndTranscribe(); } catch (e) { return fail('Transcription : ' + (e.message || e)); }
+      if (!text) return fail('Rien entendu');
+      transcript = text; stage = 'working'; msg = 'Analyse…'; draw();
+      try { parsed = await parseCalendarText(text); } catch (e) { return fail('Analyse : ' + (e.message || e)); }
+      if (!parsed.length) return fail('Aucun événement compris.');
+      stage = 'preview'; draw();
+    }
+    function readInputs() {
+      parsed.forEach((ev, i) => {
+        const t = self.container.querySelector(`[data-cv-title="${i}"]`);
+        if (t && t.value.trim()) ev.title = t.value.trim();
+        const d = self.container.querySelector(`[data-cv-date="${i}"]`);
+        if (d && d.value) ev.date = d.value;
+      });
+    }
+    async function create() {
+      readInputs();
+      stage = 'working'; msg = 'Création…'; draw();
+      try { for (const ev of parsed) await createEvent(ev.title, ev.date, ev.date, ev.colorId); }
+      catch (e) { return fail('Création : ' + (e.message || e)); }
+      self.refresh();
+    }
+
+    function view() {
+      if (stage === 'idle') {
+        return `<div class="cv">
+          ${msg ? `<div class="notes__err">${escapeHTML(msg)}</div>` : ''}
+          <button class="cv-rec cv-rec--idle" data-cv-act="record" type="button">${ICONS.mic}<span>Tape pour dicter tes événements</span></button>
+          <button class="cv-link" data-cv-act="cancel" type="button">Annuler</button>
+        </div>`;
+      }
+      if (stage === 'recording') {
+        return `<div class="cv">
+          <button class="cv-rec" data-cv-act="stop" type="button">${ICONS.mic}<span>Enregistrement… tape pour arrêter</span></button>
+          <button class="cv-link" data-cv-act="cancel" type="button">Annuler</button>
+        </div>`;
+      }
+      if (stage === 'working') {
+        return `<div class="cv-working"><span class="cv-spin"></span>${escapeHTML(msg)}</div>`;
+      }
+      if (stage === 'error') {
+        return `<div class="cv"><div class="card__error">${escapeHTML(msg)}</div>
+          <div class="cv-actions"><button class="btn btn--ghost" data-cv-act="cancel" type="button">Fermer</button><button class="btn" data-cv-act="retry" type="button">Réessayer</button></div></div>`;
+      }
+      // preview
+      const cards = parsed.map((ev, i) => `
+        <div class="cv-ev">
+          <input class="cv-title" data-cv-title="${i}" value="${escapeHTML(ev.title)}" placeholder="Titre">
+          <div class="cv-ev__row">
+            <input class="cv-date" type="date" data-cv-date="${i}" value="${escapeHTML(ev.date)}">
+            <div class="cv-colors">
+              ${CAL_CATEGORIES.map(c => `<button class="cv-color ${ev.colorId === c.colorId ? 'cv-color--on' : ''}" data-cv-color="${i}:${c.colorId}" style="background:${GOOGLE_COLORS[c.colorId]}" title="${c.label}" aria-label="${c.label}" type="button"></button>`).join('')}
+            </div>
+            <button class="cv-rm" data-cv-rm="${i}" type="button" aria-label="Retirer">${ICONS.trash}</button>
+          </div>
+        </div>`).join('');
+      return `<div class="cv">
+        <div class="cv-transcript">« ${escapeHTML(transcript)} »</div>
+        <div class="cv-list">${cards}</div>
+        <div class="cv-actions">
+          <button class="btn btn--ghost" data-cv-act="cancel" type="button">Annuler</button>
+          <button class="btn" data-cv-act="create" type="button">Créer (${parsed.length})</button>
+        </div>
+      </div>`;
+    }
+
+    function wire() {
+      const q = (s) => self.container.querySelector(s);
+      q('[data-cv-act="record"]')?.addEventListener('click', (e) => { e.stopPropagation(); haptic(8); start(); });
+      q('[data-cv-act="stop"]')?.addEventListener('click', (e) => { e.stopPropagation(); haptic(8); stop(); });
+      q('[data-cv-act="retry"]')?.addEventListener('click', (e) => { e.stopPropagation(); haptic(6); start(); });
+      q('[data-cv-act="create"]')?.addEventListener('click', (e) => { e.stopPropagation(); haptic(8); create(); });
+      q('[data-cv-act="cancel"]')?.addEventListener('click', (e) => { e.stopPropagation(); try { rec?.cancel(); } catch {} self.refresh(); });
+      self.container.querySelectorAll('[data-cv-color]').forEach(b => b.addEventListener('click', (e) => {
+        e.stopPropagation(); haptic(2);
+        const [i, cid] = b.dataset.cvColor.split(':');
+        readInputs(); parsed[+i].colorId = cid; draw();
+      }));
+      self.container.querySelectorAll('[data-cv-rm]').forEach(b => b.addEventListener('click', (e) => {
+        e.stopPropagation(); haptic(8);
+        readInputs(); parsed.splice(+b.dataset.cvRm, 1);
+        if (!parsed.length) { self.refresh(); return; }
+        draw();
+      }));
+    }
+
+    function draw() { self.setBody(view()); wire(); }
+
+    this.setSubtitle('dictée');
+    draw();
   }
 
   async refresh() {

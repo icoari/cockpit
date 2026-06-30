@@ -207,6 +207,7 @@ export function buildSyncPayload() {
     ...snapshot,
     _writer: readLocalJSON(WRITER_KEY),
     _healthTracker: readLocalJSON(HEALTH_KEY),
+    _notes: readLocalJSON(NOTES_KEY),
   });
 }
 
@@ -287,6 +288,7 @@ export function cacheBust(key) {
 // Export / Import / Reset
 const WRITER_KEY = 'bob-writer-v1';
 const HEALTH_KEY = 'health-tracker-v1';
+const NOTES_KEY = 'bob-notes-v1';
 
 function readLocalJSON(key) {
   try {
@@ -309,6 +311,7 @@ export function exportData() {
     ...snapshot,
     _writer: readLocalJSON(WRITER_KEY),
     _healthTracker: readLocalJSON(HEALTH_KEY),
+    _notes: readLocalJSON(NOTES_KEY),
   }, null, 2);
 }
 
@@ -317,9 +320,11 @@ export function importData(json) {
   if (!parsed || typeof parsed !== 'object') throw new Error('JSON invalide');
   const writer = parsed._writer;
   const health = parsed._healthTracker;
+  const notes = parsed._notes;
   const rest = { ...parsed };
   delete rest._writer;
   delete rest._healthTracker;
+  delete rest._notes;
 
   // Defensive: an empty critical array in the backup must NOT wipe the
   // populated defaults (mergeDeep replaces arrays wholesale).
@@ -360,6 +365,9 @@ export function importData(json) {
   if (health && typeof health === 'object') {
     try { localStorage.setItem(HEALTH_KEY, JSON.stringify(health)); } catch {}
   }
+  if (notes && typeof notes === 'object') {
+    try { localStorage.setItem(NOTES_KEY, JSON.stringify(notes)); } catch {}
+  }
 }
 
 export function resetAll() {
@@ -367,4 +375,5 @@ export function resetAll() {
   save();
   try { localStorage.removeItem(WRITER_KEY); } catch {}
   try { localStorage.removeItem(HEALTH_KEY); } catch {}
+  try { localStorage.removeItem(NOTES_KEY); } catch {}
 }

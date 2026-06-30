@@ -18,7 +18,8 @@ import { ProWidget } from './modules/pro.js';
 import { analyzeHealth } from './modules/insights.js';
 import { pushMonitoring } from './modules/notifications.js';
 import { TrackersWidget } from './modules/trackers.js';
-import { searchMemory, reindexMemory, lastIndexedAt } from './modules/memory.js';
+import { loadNotes, addNote, removeNote, notesByCategory, categorizeNote, recap } from './modules/memory.js';
+import { VoiceRecorder, voiceSupported } from './modules/voice.js';
 
 // ---------- Theme ----------
 function applyTheme() {
@@ -370,29 +371,26 @@ function openProject(name, opts = {}) {
         <div class="project-bar">
           <button class="project-bar__back" type="button" data-close>← Bob</button>
           <span class="project-bar__title">Mémoire</span>
-          <button class="project-bar__action" type="button" data-action="reindex" aria-label="Ré-indexer">${ICONS.refresh}</button>
         </div>
-        <div class="memory">
-          <div class="memory__search">
-            <span class="memory__search-icon" aria-hidden="true">${ICONS.search}</span>
-            <input class="memory__input" type="search" inputmode="search" enterkeyhint="search"
-                   placeholder="Cherche par le sens…" autocomplete="off" data-mem-input data-no-swipe>
+        <div class="notes">
+          <div class="notes__bar">
+            ${voiceSupported() ? `<button class="notes__action notes__action--voice" type="button" data-notes="voice">${ICONS.mic}<span>Note vocale</span></button>` : ''}
+            ${voiceSupported() ? `<button class="notes__action" type="button" data-notes="recap">${ICONS.brain}<span>Récap</span></button>` : ''}
           </div>
-          <div class="memory__filters" data-mem-filters>
-            <button class="memory__chip memory__chip--active" type="button" data-mem-type="">Tout</button>
-            <button class="memory__chip" type="button" data-mem-type="chapter">Chapitres</button>
-            <button class="memory__chip" type="button" data-mem-type="health">Journal</button>
-          </div>
-          <div class="memory__status" data-mem-status></div>
-          <div class="memory__results" data-mem-results></div>
+          <form class="notes__add" data-notes-add>
+            <input class="notes__input" type="text" placeholder="Écrire une note…" data-notes-input data-no-swipe autocomplete="off">
+            <button class="notes__add-btn" type="submit" aria-label="Ajouter">${ICONS.plus}</button>
+          </form>
+          <div class="notes__status" data-notes-status></div>
+          <div class="notes__panel" data-notes-panel hidden></div>
+          <div class="notes__list" data-notes-list></div>
         </div>
       </div>
     `;
     inner.querySelector('[data-close]').addEventListener('click', close);
     overlay.hidden = false;
     document.body.classList.add('project-open');
-    initMemory(inner, close);
-    setTimeout(() => inner.querySelector('[data-mem-input]')?.focus(), 280);
+    initNotes(inner);
     return;
   }
 
@@ -536,102 +534,120 @@ function refreshProjectStats() {
     }
   } catch { setStat('writer', 'Aucun chapitre', null); }
 
+  // Mémoire — note count
+  try {
+    const raw = localStorage.getItem('bob-notes-v1');
+    const notes = raw ? (JSON.parse(raw).notes || []) : [];
+    setStat('memory', notes.length ? 'Notes' : 'Aucune note', notes.length ? `${notes.length}` : null);
+  } catch { setStat('memory', 'Notes', null); }
+
   // BEIUE is a launcher — no live stats
 }
 
-// ---------- Mémoire (semantic search) ----------
-function initMemory(scope, close) {
-  const input = scope.querySelector('[data-mem-input]');
-  const statusEl = scope.querySelector('[data-mem-status]');
-  const resultsEl = scope.querySelector('[data-mem-results]');
-  const filters = scope.querySelector('[data-mem-filters]');
-  let activeType = '';
-  let lastQuery = '';
-  let searchToken = 0;
+// ---------- Mémoire (voice-first notes) ----------
+function initNotes(scope) {
+  const statusEl = scope.querySelector('[data-notes-status]');
+  const panel = scope.querySelector('[data-notes-panel]');
+  const listEl = scope.querySelector('[data-notes-list]');
+  const addForm = scope.querySelector('[data-notes-add]');
+  const input = scope.querySelector('[data-notes-input]');
+  let rec = null;
 
-  const typeLabel = { chapter: 'Chapitre', health: 'Journal' };
+  const setStatus = (t) => { statusEl.textContent = t || ''; };
+  const showPanel = (html) => { panel.hidden = false; panel.innerHTML = html; };
+  const hidePanel = () => { panel.hidden = true; panel.innerHTML = ''; };
+  const working = (t) => `<div class="cv-working"><span class="cv-spin"></span>${escapeHTML(t)}</div>`;
 
-  const render = (results) => {
-    if (!results.length) {
-      resultsEl.innerHTML = '<div class="memory__empty">Aucun passage proche. Reformule, ou ré-indexe (↻) si tu viens d\'écrire.</div>';
+  function renderList() {
+    const map = notesByCategory();
+    if (map.size === 0) {
+      listEl.innerHTML = '<div class="notes__empty">Aucune note. Dicte-en une, ou écris-la ci-dessus.</div>';
       return;
     }
-    resultsEl.innerHTML = results.map(r => `
-      <button class="memory-hit" type="button" data-hit-type="${r.type}" data-hit-ref="${escapeHTML(r.ref || '')}">
-        <div class="memory-hit__head">
-          <span class="memory-hit__kind memory-hit__kind--${r.type}">${typeLabel[r.type] || 'Note'}</span>
-          ${r.title ? `<span class="memory-hit__title">${escapeHTML(r.title)}</span>` : ''}
-          ${r.dateLabel ? `<span class="memory-hit__date">${escapeHTML(r.dateLabel)}</span>` : ''}
-          <span class="memory-hit__score">${Math.round(r.score * 100)}%</span>
-        </div>
-        <div class="memory-hit__snippet">${escapeHTML(r.snippet)}</div>
-      </button>
-    `).join('');
-  };
-
-  const run = async () => {
-    const q = input.value.trim();
-    lastQuery = q;
-    if (q.length < 2) { resultsEl.innerHTML = ''; statusEl.textContent = ''; return; }
-    const mine = ++searchToken;
-    statusEl.textContent = 'Recherche…';
-    try {
-      const results = await searchMemory(q, activeType || undefined);
-      if (mine !== searchToken) return;   // a newer search superseded this one
-      statusEl.textContent = results.length ? `${results.length} passage${results.length > 1 ? 's' : ''}` : '';
-      render(results);
-    } catch (e) {
-      if (mine !== searchToken) return;
-      statusEl.textContent = 'Erreur : ' + (e.message || e);
+    let html = '';
+    for (const [cat, arr] of map) {
+      html += `<div class="notes-cat">
+        <div class="notes-cat__head">${escapeHTML(cat)}<span class="notes-cat__count">${arr.length}</span></div>
+        ${arr.map(n => `<div class="note"><span class="note__text">${escapeHTML(n.text)}</span><button class="note__del" data-note-del="${n.id}" type="button" aria-label="Supprimer">${ICONS.trash}</button></div>`).join('')}
+      </div>`;
     }
-  };
+    listEl.innerHTML = html;
+    listEl.querySelectorAll('[data-note-del]').forEach(b => b.addEventListener('click', () => {
+      haptic(8); removeNote(b.dataset.noteDel); renderList();
+    }));
+  }
 
-  const runDebounced = (() => {
-    let t = null;
-    return () => { clearTimeout(t); t = setTimeout(run, 350); };
-  })();
+  // Record → transcribe, then hand the text to `onText`. Renders its own
+  // record/stop/working UI in the panel.
+  async function captureVoice(label, onText) {
+    try { rec = new VoiceRecorder(); await rec.start(); }
+    catch (e) { showPanel(`<div class="notes__err">Micro refusé : ${escapeHTML(e.message || '')}</div>`); return; }
+    showPanel(`<button class="cv-rec" type="button" data-stop>${ICONS.mic}<span>${escapeHTML(label)} — tape pour arrêter</span></button>`);
+    panel.querySelector('[data-stop]').addEventListener('click', async () => {
+      haptic(8);
+      showPanel(working('Transcription…'));
+      let text;
+      try { text = await rec.stopAndTranscribe(); }
+      catch (e) { showPanel(`<div class="notes__err">Transcription : ${escapeHTML(e.message || '')}</div>`); return; }
+      if (!text) { hidePanel(); return; }
+      onText(text);
+    });
+  }
 
-  input.addEventListener('input', runDebounced);
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); run(); } });
+  function voiceNote() {
+    captureVoice('Dis ta note', async (text) => {
+      showPanel(working('Rangement…'));
+      const { text: clean, category } = await categorizeNote(text);
+      showPanel(`
+        <div class="note-edit">
+          <textarea class="note-edit__text" data-ne-text rows="3">${escapeHTML(clean)}</textarea>
+          <div class="note-edit__row">
+            <input class="note-edit__cat" data-ne-cat value="${escapeHTML(category)}" placeholder="Catégorie">
+            <button class="btn btn--ghost" type="button" data-ne-cancel>Annuler</button>
+            <button class="btn" type="button" data-ne-save>Enregistrer</button>
+          </div>
+        </div>`);
+      panel.querySelector('[data-ne-cancel]').addEventListener('click', hidePanel);
+      panel.querySelector('[data-ne-save]').addEventListener('click', () => {
+        const t = panel.querySelector('[data-ne-text]').value.trim();
+        const c = panel.querySelector('[data-ne-cat]').value.trim() || 'Divers';
+        if (t) { addNote(t, c); haptic(12); }
+        hidePanel(); renderList();
+      });
+    });
+  }
 
-  filters.addEventListener('click', (e) => {
-    const chip = e.target.closest('[data-mem-type]');
-    if (!chip) return;
-    haptic(4);
-    activeType = chip.dataset.memType;
-    filters.querySelectorAll('.memory__chip').forEach(c =>
-      c.classList.toggle('memory__chip--active', c === chip));
-    if (lastQuery) run();
+  function recapFlow() {
+    captureVoice('Pose ta question', async (question) => {
+      showPanel(working('Récap…'));
+      let ans;
+      try { ans = await recap(question); }
+      catch (e) { showPanel(`<div class="notes__err">${escapeHTML(e.message || 'échec')}</div>`); return; }
+      showPanel(`<div class="notes__recap">
+        <div class="notes__recap-q">« ${escapeHTML(question)} »</div>
+        <div class="notes__recap-a">${tinyMarkdown(ans)}</div>
+        <button class="btn btn--ghost" type="button" data-recap-close>Fermer</button>
+      </div>`);
+      panel.querySelector('[data-recap-close]').addEventListener('click', hidePanel);
+    });
+  }
+
+  scope.querySelector('[data-notes="voice"]')?.addEventListener('click', () => { haptic(6); voiceNote(); });
+  scope.querySelector('[data-notes="recap"]')?.addEventListener('click', () => { haptic(6); recapFlow(); });
+
+  addForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const v = input.value.trim();
+    if (!v) return;
+    input.value = '';
+    setStatus('Rangement…');
+    try { const { text, category } = await categorizeNote(v); addNote(text, category); }
+    catch { addNote(v, 'Divers'); }
+    setStatus('');
+    renderList();
   });
 
-  resultsEl.addEventListener('click', (e) => {
-    const hit = e.target.closest('[data-hit-type]');
-    if (!hit) return;
-    haptic(6);
-    const type = hit.dataset.hitType;
-    const ref = hit.dataset.hitRef;
-    close();
-    if (type === 'chapter') openProject('writer', { openChapterId: ref });
-    else if (type === 'health') openProject('health');
-  });
-
-  // Reindex on open (background) so freshly-written text is searchable, and
-  // on the manual ↻ button.
-  const doReindex = async (manual) => {
-    statusEl.textContent = manual ? 'Indexation…' : statusEl.textContent;
-    try {
-      const n = await reindexMemory();
-      if (manual) {
-        statusEl.textContent = `Indexé · ${n} passages`;
-        setTimeout(() => { if (!lastQuery) statusEl.textContent = ''; }, 2500);
-      }
-    } catch (e) {
-      if (manual) statusEl.textContent = 'Indexation échouée : ' + (e.message || e);
-    }
-  };
-  scope.querySelector('[data-action="reindex"]').addEventListener('click', () => { haptic(4); doReindex(true); });
-  // Auto-reindex if it's been a while (or never).
-  if (Date.now() - lastIndexedAt() > 5 * 60 * 1000) doReindex(false);
+  renderList();
 }
 
 // ---------- Health insights panel (lives inside the Suivi santé project shell) ----------
@@ -705,6 +721,17 @@ document.addEventListener('bob-open-project', (e) => {
 document.addEventListener('bob-goto-tab', (e) => {
   const tab = e.detail?.tab;
   if (VISIBLE_TABS.includes(tab)) setActiveTab(tab);
+});
+
+// "Dicter un event" shortcut → Perso tab, then start the calendar voice flow.
+document.addEventListener('bob-dicter-event', () => {
+  setActiveTab('perso');
+  setTimeout(() => {
+    try {
+      widgets.calendar?.enterVoiceMode();
+      document.querySelector('[data-widget="calendar"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch {}
+  }, 120);
 });
 
 // Keep the Worker's monitoring config in sync with the current settings

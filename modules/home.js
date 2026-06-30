@@ -206,16 +206,15 @@ export class HomeWidget {
 
       <section class="home-section" data-section="quick">
         <div class="home-section__head"><span class="home-section__label">Accès rapide</span></div>
-        <button class="home-voice" type="button" data-home-voice>
-          <span class="home-voice__icon">${ICONS.mic}</span>
-          <span>Dicter ma santé</span>
-        </button>
-        <div class="home-quick">
-          <button class="home-quick__btn" type="button" data-home-project="writer">
-            <span class="home-quick__icon">${ICONS.feather}</span><span class="home-quick__label">Écrire</span>
+        <div class="home-actions">
+          <button class="home-voice" type="button" data-home-voice>
+            <span class="home-voice__icon">${ICONS.mic}</span><span>Dicter ma santé</span>
           </button>
-          <button class="home-quick__btn" type="button" data-home-project="memory">
-            <span class="home-quick__icon">${ICONS.brain}</span><span class="home-quick__label">Mémoire</span>
+          <button class="home-voice home-voice--event" type="button" data-home-event>
+            <span class="home-voice__icon">${ICONS.mic}</span><span>Dicter un event</span>
+          </button>
+          <button class="home-voice home-voice--memory" type="button" data-home-memory>
+            <span class="home-voice__icon">${ICONS.brain}</span><span>Mémoire</span>
           </button>
         </div>
       </section>
@@ -242,6 +241,16 @@ export class HomeWidget {
       if (e.target.closest('[data-home-voice]')) {
         haptic(6);
         document.dispatchEvent(new CustomEvent('bob-open-project', { detail: { project: 'health', voice: true } }));
+        return;
+      }
+      if (e.target.closest('[data-home-event]')) {
+        haptic(6);
+        document.dispatchEvent(new CustomEvent('bob-dicter-event'));
+        return;
+      }
+      if (e.target.closest('[data-home-memory]')) {
+        haptic(6);
+        document.dispatchEvent(new CustomEvent('bob-open-project', { detail: { project: 'memory' } }));
         return;
       }
       const tile = e.target.closest('[data-goto]');

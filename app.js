@@ -9,7 +9,7 @@ import { LastTrainWidget } from './modules/lastTrain.js';
 import { GasWidget } from './modules/gas.js';
 import { WeatherCard } from './modules/weatherCard.js';
 import { AirQualityWidget } from './modules/airquality.js';
-import { CalendarWidget } from './modules/calendar.js';
+import { CalendarWidget, runEventDictation } from './modules/calendar.js';
 import { BinsWidget } from './modules/bins.js';
 import { PharmaciesWidget } from './modules/pharmacies.js';
 import { SettingsPanel } from './modules/settings.js';
@@ -723,16 +723,34 @@ document.addEventListener('bob-goto-tab', (e) => {
   if (VISIBLE_TABS.includes(tab)) setActiveTab(tab);
 });
 
-// "Dicter un event" shortcut → Perso tab, then start the calendar voice flow.
-document.addEventListener('bob-dicter-event', () => {
-  setActiveTab('perso');
-  setTimeout(() => {
-    try {
-      widgets.calendar?.enterVoiceMode();
-      document.querySelector('[data-widget="calendar"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } catch {}
-  }, 120);
-});
+// "Dicter un event" → a dedicated dictation overlay that auto-starts. Opened
+// straight from the tap (gesture preserved → mic works without re-prompt).
+function openEventDictation() {
+  const overlay = document.getElementById('projectOverlay');
+  const inner = document.getElementById('projectOverlayInner');
+  if (!overlay || !inner) return;
+  const close = () => {
+    overlay.hidden = true;
+    inner.innerHTML = '';
+    document.body.classList.remove('project-open');
+  };
+  inner.innerHTML = `
+    <div class="project-shell">
+      <div class="project-bar">
+        <button class="project-bar__back" type="button" data-close>← Bob</button>
+        <span class="project-bar__title">Dicter un event</span>
+      </div>
+      <div class="dictate-host" id="dictateHost"></div>
+    </div>`;
+  inner.querySelector('[data-close]').addEventListener('click', close);
+  overlay.hidden = false;
+  document.body.classList.add('project-open');
+  runEventDictation(document.getElementById('dictateHost'), {
+    onClose: close,
+    onCreated: () => { try { widgets.calendar?.refresh(); } catch {} },
+  });
+}
+document.addEventListener('bob-dicter-event', openEventDictation);
 
 // Keep the Worker's monitoring config in sync with the current settings
 // (IDFM key, alert toggles, stop coords). Fire-and-forget on startup.

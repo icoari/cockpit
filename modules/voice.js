@@ -53,7 +53,7 @@ export class VoiceRecorder {
 
   async start() {
     if (!voiceSupported()) throw new Error('Micro non disponible sur cet appareil.');
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    this.stream = await acquireMic();
     this.mime = pickMime();
     this.chunks = [];
     this.rec = this.mime ? new MediaRecorder(this.stream, { mimeType: this.mime })
@@ -85,11 +85,40 @@ export class VoiceRecorder {
   }
 
   _teardown() {
-    try { this.stream?.getTracks().forEach(t => t.stop()); } catch {}
+    // Keep the shared mic stream alive (released on idle) so we don't re-prompt
+    // for permission on every recording — just drop the recorder.
     this.rec = null;
     this.stream = null;
     this.chunks = [];
+    scheduleMicRelease();
   }
+}
+
+// ---- Shared mic stream --------------------------------------------------
+// Acquire the microphone once and reuse it across recordings so iOS doesn't
+// re-prompt every time. Released automatically after a stretch of inactivity
+// so the "mic in use" indicator doesn't linger forever.
+let sharedStream = null;
+let releaseTimer = null;
+const MIC_IDLE_RELEASE_MS = 90_000;
+
+async function acquireMic() {
+  if (releaseTimer) { clearTimeout(releaseTimer); releaseTimer = null; }
+  const live = sharedStream && sharedStream.getAudioTracks().some(t => t.readyState === 'live');
+  if (live) return sharedStream;
+  sharedStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  return sharedStream;
+}
+
+function scheduleMicRelease() {
+  if (releaseTimer) clearTimeout(releaseTimer);
+  releaseTimer = setTimeout(releaseMic, MIC_IDLE_RELEASE_MS);
+}
+
+export function releaseMic() {
+  if (releaseTimer) { clearTimeout(releaseTimer); releaseTimer = null; }
+  try { sharedStream?.getTracks().forEach(t => t.stop()); } catch {}
+  sharedStream = null;
 }
 
 export async function transcribeBlob(blob) {

@@ -33,6 +33,8 @@ index_name = "bob-memory"
 VAPID_PUBLIC_KEY = "BFAFeTqjyY9y1FTcPcWtFHfARz4hUkXCBa9iqFePsaX0MhCiHTsXlazm65CbqIbL2EBl5qRw_tRMzdueTwsXd9o"
 VAPID_SUBJECT    = "mailto:bob@icoari.dev"
 # VAPID_PRIVATE_KEY is a secret, set via:  wrangler secret put VAPID_PRIVATE_KEY
+# GOOGLE_CLIENT_SECRET (Google Calendar refresh flow) is a secret, set via:
+#   wrangler secret put GOOGLE_CLIENT_SECRET
 
 [triggers]
 crons = [

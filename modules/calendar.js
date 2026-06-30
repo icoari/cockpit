@@ -1,6 +1,7 @@
 import { getSettings, save } from './state.js';
 import { ICONS } from './icons.js';
 import { escapeHTML, haptic, fetchWithTimeout } from './util.js';
+import { WORKER_URL } from './sync.js';
 
 // calendar.events scope = read + write events (no calendar settings changes).
 const SCOPE = 'https://www.googleapis.com/auth/calendar.events';
@@ -21,6 +22,16 @@ function loadGIS() {
   return gisLoadPromise;
 }
 
+function getSyncToken() {
+  try {
+    const raw = localStorage.getItem('bob-sync-v1');
+    const s = raw ? JSON.parse(raw) : null;
+    return s?.authToken || null;
+  } catch { return null; }
+}
+
+// Local cache of the short-lived access token (Worker mints these from the
+// refresh token it holds — so this is just to avoid a round-trip per call).
 function getStoredToken() {
   const t = getSettings().calendar?.token;
   if (!t || !t.access_token || !t.expires_at) return null;
@@ -44,30 +55,71 @@ function clearToken() {
   save();
 }
 
-async function requestToken({ silent = false } = {}) {
+const SIGN_IN_NEEDED = () => Object.assign(new Error('SIGN_IN_NEEDED'), { silent: true });
+
+// One-time interactive consent: GIS authorization-code flow (popup). The code
+// goes to the Worker, which trades it for a refresh token + access token.
+async function interactiveConnect() {
   await loadGIS();
   const clientId = getSettings().calendar?.clientId;
   if (!clientId) throw new Error('CLIENT_ID_MISSING');
-  return new Promise((resolve, reject) => {
-    const client = google.accounts.oauth2.initTokenClient({
+  const code = await new Promise((resolve, reject) => {
+    const client = google.accounts.oauth2.initCodeClient({
       client_id: clientId,
       scope: SCOPE,
+      ux_mode: 'popup',
+      // access_type=offline + prompt=consent → Google returns a refresh token.
+      access_type: 'offline',
+      prompt: 'consent',
       callback: (resp) => {
         if (resp.error) reject(new Error(resp.error_description || resp.error));
-        else { storeToken(resp); resolve(resp.access_token); }
+        else if (resp.code) resolve(resp.code);
+        else reject(new Error('no_code'));
       },
       error_callback: (err) => reject(new Error(err.type || err.message || 'oauth_error')),
     });
-    if (silent) client.requestAccessToken({ prompt: '' });
-    else        client.requestAccessToken();
+    client.requestCode();
   });
+
+  const sync = getSyncToken();
+  if (!sync) throw new Error('Active la sauvegarde cloud — l\'agenda passe par ton Worker.');
+  const r = await fetch(`${WORKER_URL}/google/exchange`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sync}` },
+    body: JSON.stringify({ code, clientId, redirectUri: 'postmessage' }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || !data.access_token) throw new Error(data.error || `Échange HTTP ${r.status}`);
+  storeToken(data);
+  return data.access_token;
+}
+
+// Silent: ask the Worker to mint a fresh access token from the stored refresh
+// token. No user interaction. Throws SIGN_IN_NEEDED if there's no refresh
+// token yet (or it was revoked).
+async function refreshViaWorker() {
+  const sync = getSyncToken();
+  if (!sync) throw SIGN_IN_NEEDED();
+  const clientId = getSettings().calendar?.clientId;
+  let r;
+  try {
+    r = await fetch(`${WORKER_URL}/google/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sync}` },
+      body: JSON.stringify({ clientId }),
+    });
+  } catch { throw SIGN_IN_NEEDED(); }
+  if (r.status === 409) throw SIGN_IN_NEEDED();   // no/revoked refresh token
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || !data.access_token) throw SIGN_IN_NEEDED();
+  storeToken(data);
+  return data.access_token;
 }
 
 async function ensureToken() {
-  let token = getStoredToken();
+  const token = getStoredToken();
   if (token) return token;
-  try { return await requestToken({ silent: true }); }
-  catch { throw Object.assign(new Error('SIGN_IN_NEEDED'), { silent: true }); }
+  return refreshViaWorker();
 }
 
 // ---------- Calendar API ----------
@@ -81,12 +133,12 @@ async function fetchEventsRange(timeMinIso, timeMaxIso, retried = false) {
   const url = `${calendarUrl()}?timeMin=${encodeURIComponent(timeMinIso)}&timeMax=${encodeURIComponent(timeMaxIso)}&singleEvents=true&orderBy=startTime&maxResults=250`;
   const resp = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${token}` } }, 9000);
   if (resp.status === 401) {
-    // One silent retry only — a token Google grants but the API still
-    // rejects (revoked access, scope mismatch) would otherwise loop forever.
-    if (retried) throw Object.assign(new Error('SIGN_IN_NEEDED'), { silent: true });
+    // One silent retry only — mint a fresh token from the Worker's refresh
+    // token. If that fails, the user must re-consent once.
+    if (retried) throw SIGN_IN_NEEDED();
     clearToken();
-    try { token = await requestToken({ silent: true }); }
-    catch { throw Object.assign(new Error('SIGN_IN_NEEDED'), { silent: true }); }
+    try { token = await refreshViaWorker(); }
+    catch { throw SIGN_IN_NEEDED(); }
     return fetchEventsRange(timeMinIso, timeMaxIso, true);
   }
   if (!resp.ok) throw new Error(`Agenda : HTTP ${resp.status}`);
@@ -395,7 +447,7 @@ export class CalendarWidget {
 
   async signIn() {
     try {
-      await requestToken({ silent: false });
+      await interactiveConnect();
       this.refresh();
     } catch (e) {
       this.setBody(`<div class="card__error">${escapeHTML(e.message || 'Échec de connexion')}</div>`);

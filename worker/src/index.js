@@ -25,6 +25,7 @@ const KEY_HEALTH_PING = KV_PREFIX + 'healthPing';
 const KEY_LAST_TRAIN_ALERTED = KV_PREFIX + 'lastTrainAlerted';
 const KEY_TREATMENT = KV_PREFIX + 'treatment';      // medication schedule
 const KEY_MED_STATE = KV_PREFIX + 'medState';        // today's taken/alerted doses
+const KEY_GOOGLE = KV_PREFIX + 'google';             // Google Calendar refresh token
 
 // Curated baseline sources merged with the user's own — these stay fresh
 // even before the user has configured anything on a new device.
@@ -75,6 +76,11 @@ export default {
       if (p === '/cron/run')            return assertMethod(request, 'POST', () => handleCronRun(request, env, url));
 
       if (p === '/llm')                 return assertMethod(request, 'POST', () => handleLlm(request, env));
+
+      // Google Calendar — server-side OAuth so access survives past 1h (the
+      // browser implicit flow can't refresh and re-prompts every launch).
+      if (p === '/google/exchange')     return assertMethod(request, 'POST', () => handleGoogleExchange(request, env));
+      if (p === '/google/token')        return assertMethod(request, 'POST', () => handleGoogleToken(request, env));
 
       // Workers AI (paid plan) — all auth-gated like the LLM proxy.
       if (p === '/transcribe')          return assertMethod(request, 'POST', () => authed(request, env, () => handleTranscribe(request, env, json)));
@@ -281,6 +287,7 @@ async function handleWipe(request, env) {
   await env.KV.delete(KEY_LAST_TRAIN_ALERTED);
   await env.KV.delete(KEY_TREATMENT);
   await env.KV.delete(KEY_MED_STATE);
+  await env.KV.delete(KEY_GOOGLE);
   return json({ ok: true });
 }
 
@@ -416,6 +423,86 @@ async function handleHealthPing(request, env) {
   }
   await env.KV.put(KEY_HEALTH_PING, JSON.stringify({ lastEntryDate: date, lastSlot: slot, ts: Date.now() }));
   return json({ ok: true });
+}
+
+// ====================================================================
+// Google Calendar OAuth (authorization-code flow with refresh token)
+//
+// The browser does an interactive consent once via GIS initCodeClient and
+// sends us the auth code. We exchange it for a refresh token (stored here,
+// like the IDFM key) + an access token. Thereafter the client asks us to
+// mint fresh access tokens from the refresh token — no re-consent.
+//
+// The client_id is public and sent by the client; only the client_secret is
+// a Worker secret (wrangler secret put GOOGLE_CLIENT_SECRET).
+// ====================================================================
+
+const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+
+async function handleGoogleExchange(request, env) {
+  if (!await verifyAuth(request, env)) return json({ error: 'unauthorized' }, 401);
+  const secret = env.GOOGLE_CLIENT_SECRET;
+  if (!secret) return json({ error: 'GOOGLE_CLIENT_SECRET non configuré sur le Worker' }, 500);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'invalid json' }, 400); }
+  const { code, clientId, redirectUri } = body || {};
+  if (!code || !clientId) return json({ error: 'code and clientId required' }, 400);
+
+  const params = new URLSearchParams({
+    code, client_id: clientId, client_secret: secret,
+    redirect_uri: redirectUri || 'postmessage',
+    grant_type: 'authorization_code',
+  });
+  let data;
+  try {
+    const r = await fetch(GOOGLE_TOKEN_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params,
+      signal: AbortSignal.timeout(10_000),
+    });
+    data = await r.json();
+    if (!r.ok) return json({ error: data.error_description || data.error || `exchange HTTP ${r.status}` }, 502);
+  } catch (e) {
+    return json({ error: 'exchange failed: ' + e.message }, 502);
+  }
+  // Persist the refresh token (only returned on first consent / prompt=consent).
+  if (data.refresh_token) {
+    await env.KV.put(KEY_GOOGLE, JSON.stringify({ refresh_token: data.refresh_token, clientId }));
+  }
+  return json({ access_token: data.access_token, expires_in: data.expires_in || 3600, got_refresh: !!data.refresh_token });
+}
+
+async function handleGoogleToken(request, env) {
+  if (!await verifyAuth(request, env)) return json({ error: 'unauthorized' }, 401);
+  const secret = env.GOOGLE_CLIENT_SECRET;
+  if (!secret) return json({ error: 'GOOGLE_CLIENT_SECRET non configuré sur le Worker' }, 500);
+  const raw = await env.KV.get(KEY_GOOGLE);
+  if (!raw) return json({ error: 'no_refresh_token' }, 409);
+  const stored = JSON.parse(raw);
+  let clientId = stored.clientId;
+  try { const b = await request.json(); if (b && b.clientId) clientId = b.clientId; } catch {}
+  if (!clientId) return json({ error: 'no client id' }, 400);
+
+  const params = new URLSearchParams({
+    client_id: clientId, client_secret: secret,
+    refresh_token: stored.refresh_token, grant_type: 'refresh_token',
+  });
+  let data;
+  try {
+    const r = await fetch(GOOGLE_TOKEN_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params,
+      signal: AbortSignal.timeout(10_000),
+    });
+    data = await r.json();
+    if (!r.ok) {
+      // Refresh token revoked / expired (e.g. consent screen still in Testing
+      // mode → 7-day expiry). Drop it so the client re-consents cleanly.
+      if (data.error === 'invalid_grant') { await env.KV.delete(KEY_GOOGLE); return json({ error: 'refresh_revoked' }, 409); }
+      return json({ error: data.error_description || data.error || `refresh HTTP ${r.status}` }, 502);
+    }
+  } catch (e) {
+    return json({ error: 'refresh failed: ' + e.message }, 502);
+  }
+  return json({ access_token: data.access_token, expires_in: data.expires_in || 3600 });
 }
 
 // Treatment schedule pushed by the health app — times, cycle, on/off. Stored

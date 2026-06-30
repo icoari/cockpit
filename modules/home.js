@@ -203,6 +203,10 @@ export class HomeWidget {
 
       <section class="home-section" data-section="quick">
         <div class="home-section__head"><span class="home-section__label">Accès rapide</span></div>
+        <button class="home-voice" type="button" data-home-voice>
+          <span class="home-voice__icon">${ICONS.mic}</span>
+          <span>Dicter ma santé</span>
+        </button>
         <div class="home-quick">
           <button class="home-quick__btn home-quick__btn--health" type="button" data-home-project="health">
             <span class="home-quick__icon">${ICONS.activity}</span><span class="home-quick__label">Santé</span>
@@ -242,6 +246,11 @@ export class HomeWidget {
         e.preventDefault(); e.stopPropagation();
         haptic(4);
         this.regenerateGreeting(true);
+        return;
+      }
+      if (e.target.closest('[data-home-voice]')) {
+        haptic(6);
+        document.dispatchEvent(new CustomEvent('bob-open-project', { detail: { project: 'health', voice: true } }));
         return;
       }
       const tile = e.target.closest('[data-goto]');

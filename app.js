@@ -318,8 +318,10 @@ function openProject(name, opts = {}) {
     const currentTheme = getSettings().theme || 'auto';
     const cacheBust = Date.now();
     // A medication reminder deep-links to a specific dose (?dose=midi) so the
-    // health app opens straight onto it and marks it taken.
+    // health app opens straight onto it and marks it taken. ?voice=1 arms the
+    // dictation recorder (from the "Dicter ma santé" shortcut).
     const doseParam = opts.dose ? `&dose=${encodeURIComponent(opts.dose)}` : '';
+    const voiceParam = opts.voice ? '&voice=1' : '';
     inner.innerHTML = `
       <div class="project-shell">
         <div class="project-bar">
@@ -327,7 +329,7 @@ function openProject(name, opts = {}) {
           <span class="project-bar__title">Suivi santé</span>
           <button class="project-bar__action" type="button" data-action="analyze" aria-label="Analyse">${ICONS.lightbulb}</button>
         </div>
-        <iframe class="project-frame" src="../health-tracker/?theme=${encodeURIComponent(currentTheme)}${doseParam}&_v=${cacheBust}" allow="microphone; vibrate"></iframe>
+        <iframe class="project-frame" src="../health-tracker/?theme=${encodeURIComponent(currentTheme)}${doseParam}${voiceParam}&_v=${cacheBust}" allow="microphone; vibrate"></iframe>
         <div class="insights-overlay" hidden data-insights-overlay>
           <div class="insights-panel">
             <div class="insights-panel__head">
@@ -694,7 +696,9 @@ initSwipeNavigation();
 // Project cards on the Home page send a custom event — route it through openProject.
 document.addEventListener('bob-open-project', (e) => {
   const name = e.detail?.project;
-  if (name === 'health' || name === 'writer' || name === 'beiue' || name === 'memory') openProject(name);
+  if (name === 'health' || name === 'writer' || name === 'beiue' || name === 'memory') {
+    openProject(name, { voice: e.detail?.voice });
+  }
 });
 
 // Home tiles navigate to their related tab.

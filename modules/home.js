@@ -6,6 +6,17 @@ import { ICONS } from './icons.js';
 import { escapeHTML, fetchWithTimeout, timeAgo, haptic, safeUrl } from './util.js';
 import { getSettings, getState, cacheGet, cacheSet } from './state.js';
 import { isConfigured as llmConfigured, complete } from './llm.js';
+import { nextJAndRer } from './trains.js';
+
+async function getTransport() {
+  const cached = cacheGet('home_transport', 60 * 1000);
+  if (cached) return cached;
+  try {
+    const t = await nextJAndRer();
+    if (t) cacheSet('home_transport', t);
+    return t;
+  } catch { return null; }
+}
 
 const GREETING_KEY = 'bob-home-greeting-v1';
 const GREETING_TTL_MS = 4 * 3600 * 1000;       // 4 h fresh
@@ -57,42 +68,6 @@ async function fetchWeather() {
     cacheSet('home_weather', out);
     return out;
   } catch { return null; }
-}
-
-function getCalendarToday() {
-  const ev = window.__bobWidgets?.calendar?.events || [];
-  const start = new Date(); start.setHours(0, 0, 0, 0);
-  const end = new Date();   end.setHours(23, 59, 59, 999);
-  const list = ev
-    .map(e => {
-      const allDay = !!(e.start?.date && !e.start?.dateTime);
-      // All-day events carry a bare "YYYY-MM-DD" — parse as LOCAL midnight,
-      // not UTC (new Date('YYYY-MM-DD') is UTC → 02:00 here, the "à 02:00" bug).
-      const startDt = e.start?.dateTime ? new Date(e.start.dateTime)
-                    : e.start?.date ? new Date(e.start.date + 'T00:00:00') : null;
-      return startDt ? { start: startDt, title: e.summary || '', allDay } : null;
-    })
-    .filter(Boolean)
-    .filter(x => x.start >= start && x.start <= end)
-    .sort((a, b) => a.start - b.start);
-  return list;
-}
-
-function getTrainsAller() {
-  const w = window.__bobWidgets?.trainsAller;
-  if (!w?.items?.length) return null;
-  const first = w.items[0];
-  if (!first?.expected) return null;
-  const minUntil = Math.round((first.expected - Date.now()) / 60000);
-  const line = (first.lineRef || '').includes('C01742') ? 'RER A'
-             : (first.lineRef || '').includes('C01739') ? 'J' : '';
-  return {
-    line,
-    destination: first.destination,
-    minUntil,
-    time: first.expected.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-    cancelled: !!first.cancelled,
-  };
 }
 
 function getDigestHeadlines() {
@@ -303,15 +278,14 @@ export class HomeWidget {
   hasMeaningfulContext() {
     const c = this.context;
     if (!c) return false;
-    return !!(c.weather || (c.calendar && c.calendar.length) || c.train || (c.headlines && c.headlines.length));
+    return !!(c.weather || c.transport || (c.headlines && c.headlines.length));
   }
 
   async gatherContext() {
-    const [weather] = await Promise.all([fetchWeather()]);
+    const [weather, transport] = await Promise.all([fetchWeather(), getTransport()]);
     return {
       weather,
-      calendar: getCalendarToday(),
-      train: getTrainsAller(),
+      transport,
       headlines: getDigestHeadlines(),
       projects: getProjectStats(),
       now: new Date(),
@@ -322,46 +296,43 @@ export class HomeWidget {
     const el = this.container.querySelector('[data-tiles]');
     if (!el) return;
     const c = this.context;
-    const tiles = [];
-    if (c.weather) {
-      tiles.push({
-        label: 'Météo',
-        value: `${c.weather.temp}°`,
-        sub: weatherLabelFromCode(c.weather.code),
-        goto: 'perso',
-      });
-    }
-    if (c.train) {
-      tiles.push({
-        label: c.train.line ? `Train · ${c.train.line}` : 'Train aller',
-        value: c.train.cancelled ? 'supprimé' : c.train.time,
-        sub: c.train.cancelled ? '—' : (c.train.minUntil <= 1 ? 'imminent' : `dans ${c.train.minUntil} min`),
-        goto: 'trains',
-      });
-    } else {
-      tiles.push({
-        label: 'Train aller',
-        value: '—',
-        sub: 'chargement…',
-        goto: 'trains',
-      });
-    }
-    const nextEvent = c.calendar[0];
-    tiles.push({
-      label: 'Agenda',
-      value: c.calendar.length === 0 ? 'libre' : `${c.calendar.length} RDV`,
-      sub: nextEvent
-        ? `${nextEvent.allDay ? 'Journée' : nextEvent.start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · ${nextEvent.title.slice(0, 24)}`
-        : 'rien aujourd\'hui',
-      goto: 'perso',
-    });
-    el.innerHTML = tiles.map(t => `
-      <button class="home-tile" type="button" data-goto="${escapeHTML(t.goto || '')}">
-        <span class="home-tile__label">${escapeHTML(t.label)}</span>
-        <span class="home-tile__value">${escapeHTML(t.value)}</span>
-        <span class="home-tile__sub">${escapeHTML(t.sub)}</span>
-      </button>
-    `).join('');
+
+    const weatherTile = c.weather ? `
+      <button class="home-tile" type="button" data-goto="perso">
+        <span class="home-tile__label">Météo</span>
+        <span class="home-tile__value">${c.weather.temp}°</span>
+        <span class="home-tile__sub">${escapeHTML(weatherLabelFromCode(c.weather.code))}</span>
+      </button>` : '';
+
+    el.innerHTML = weatherTile + this.transportTile(c.transport);
+  }
+
+  // Wide tile: next Transilien J + next RER A, for the direction that matches
+  // the current location (toward Paris from home, toward Conflans from Paris).
+  transportTile(tr) {
+    const dirLabel = tr ? (tr.direction === 'retour' ? '→ Conflans' : '→ Paris') : '';
+    const row = (kind, dep) => {
+      const name = kind === 'j' ? 'J' : 'RER A';
+      if (!dep) {
+        return `<div class="home-train"><span class="home-train__line line-${kind}">${name}</span><span class="home-train__time">—</span><span class="home-train__in">—</span></div>`;
+      }
+      const mins = Math.round((dep.expectedMs - Date.now()) / 60000);
+      const time = new Date(dep.expectedMs).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      const when = dep.cancelled ? 'supprimé' : (mins <= 0 ? 'à quai' : mins <= 1 ? 'imminent' : `${mins} min`);
+      return `<div class="home-train ${dep.cancelled ? 'home-train--cancel' : ''}">
+        <span class="home-train__line line-${kind}">${name}</span>
+        <span class="home-train__time">${time}</span>
+        <span class="home-train__in">${when}</span>
+      </div>`;
+    };
+    const body = tr
+      ? `<div class="home-trains">${row('j', tr.j)}${row('rer', tr.rer)}</div>`
+      : `<div class="home-train__empty">Prochains départs · ouvre Trains</div>`;
+    return `
+      <button class="home-tile home-tile--wide" type="button" data-goto="trains">
+        <span class="home-tile__label">Prochains départs ${escapeHTML(dirLabel)}</span>
+        ${body}
+      </button>`;
   }
 
   renderPrios() {
@@ -458,14 +429,11 @@ function buildGreetingPrompt(c) {
   const moment = hh < 11 ? 'matin' : hh < 14 ? 'midi' : hh < 18 ? 'après-midi' : 'soir';
   lines.push(`Date : ${today}, ${moment} (${hh}h).`);
   if (c.weather) lines.push(`Météo : ${c.weather.temp}°C, ${weatherLabelFromCode(c.weather.code)}.`);
-  if (c.calendar.length === 0) lines.push(`Agenda : aucun rendez-vous aujourd'hui.`);
-  else lines.push(`Agenda : ${c.calendar.length} RDV — ${c.calendar.map(e => `${e.allDay ? 'journée' : e.start.getHours() + 'h' + String(e.start.getMinutes()).padStart(2, '0')} ${e.title}`).slice(0, 4).join(', ')}.`);
-  if (c.train) lines.push(`Train aller : ${c.train.cancelled ? 'supprimé' : `${c.train.time} (dans ${c.train.minUntil} min)`}.`);
-  if (c.headlines.length) {
-    lines.push(`Items en tête de file :`);
+  if (c.headlines && c.headlines.length) {
+    lines.push(`Actu tech du jour :`);
     c.headlines.forEach(h => lines.push(`- ${h.source} — ${h.title}${h.why ? ' (' + h.why + ')' : ''}`));
   }
-  if (c.projects.health) lines.push(`Santé : ${c.projects.health.sub}.`);
-  if (c.projects.writer) lines.push(`Écriture : ${c.projects.writer.sub}.`);
-  return lines.join('\n') + `\n\nDonne 3 phrases d'ouverture, factuelles, qui mettent en avant ce qui compte ce ${moment}.`;
+  // Volontairement SANS trains, agenda ni écriture — l'ouverture parle surtout
+  // de l'actu tech (et de la météo).
+  return lines.join('\n') + `\n\nDonne 2 à 3 phrases d'ouverture, factuelles, centrées sur l'actu tech qui compte ce ${moment}. N'invente pas de rendez-vous ni d'agenda.`;
 }

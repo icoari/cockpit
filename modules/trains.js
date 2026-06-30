@@ -353,3 +353,56 @@ export class TrainsWidget {
     this.setBody(html, this.buildSummary(filtered) + (usedGeoloc ? ` · ${station.name}` : ''));
   }
 }
+
+// Next Transilien J + next RER A for the location-relevant direction (toward
+// Paris when near home, toward Conflans when near Paris). Used by the home
+// page transport tile. Returns serializable departures (epoch ms).
+export async function nextJAndRer() {
+  const settings = getSettings();
+  if (!settings.idfm?.apiKey) return null;
+  const lines = settings.idfm.lines;
+
+  // Direction from geolocation (same heuristic as the trains tab ordering).
+  let direction = 'aller';
+  try {
+    const pos = await getPosition({ timeout: 4500 });
+    if (pos) {
+      const stops = settings.idfm?.stopCoords || { paris: { lat: 48.8757, lon: 2.3247 }, home: { lat: 48.991156, lon: 2.074643 } };
+      const dHome = distanceKm(pos, stops.home);
+      const dParis = distanceKm(pos, stops.paris);
+      if (dParis < 12 && dHome > 15) direction = 'retour';
+    }
+  } catch {}
+
+  const soonest = (deps) => {
+    const valid = deps.filter(d => d.expected);
+    const pick = valid.find(d => !d.cancelled) || valid[0] || null;
+    return pick ? { expectedMs: pick.expected.getTime(), destination: pick.destination || '', cancelled: !!pick.cancelled } : null;
+  };
+
+  let j = null, rer = null;
+  try {
+    if (direction === 'aller') {
+      const all = extractDepartures(await fetchStop(settings.idfm.stops.conflansFinDOise, settings.idfm.apiKey, {}));
+      j = soonest(all.filter(d => isParisBoundFromConflans(d, lines.transilienJ)));
+      rer = soonest(all.filter(d => isParisBoundFromConflans(d, lines.rerA)));
+    } else {
+      try {
+        const jAll = extractDepartures(await fetchStop(settings.idfm.stops.saintLazare, settings.idfm.apiKey, {}));
+        j = soonest(jAll.filter(isConflansBoundFromParisJ));
+      } catch {}
+      try {
+        let station = PARIS_RER_A[0];
+        const pos = await getPosition({ timeout: 3000 });
+        if (pos) {
+          const s = PARIS_RER_A.map(x => ({ ...x, d: distanceKm(pos, x) })).sort((a, b) => a.d - b.d);
+          if (s[0].d < 50) station = s[0];
+        }
+        const rerAll = extractDepartures(await fetchStop(station.stopRef, settings.idfm.apiKey, {}));
+        rer = soonest(rerAll.filter(isConflansBoundFromParisRER));
+      } catch {}
+    }
+  } catch { return { direction, j: null, rer: null }; }
+
+  return { direction, j, rer };
+}

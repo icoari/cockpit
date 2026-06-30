@@ -211,18 +211,6 @@ export class HomeWidget {
           <span>Dicter ma santé</span>
         </button>
         <div class="home-quick">
-          <button class="home-quick__btn home-quick__btn--health" type="button" data-home-project="health">
-            <span class="home-quick__icon">${ICONS.activity}</span><span class="home-quick__label">Santé</span>
-          </button>
-          <button class="home-quick__btn" type="button" data-goto="trains">
-            <span class="home-quick__icon">${ICONS.train}</span><span class="home-quick__label">Trains</span>
-          </button>
-          <button class="home-quick__btn" type="button" data-goto="perso">
-            <span class="home-quick__icon">${ICONS.home}</span><span class="home-quick__label">Perso</span>
-          </button>
-          <button class="home-quick__btn" type="button" data-goto="pro">
-            <span class="home-quick__icon">${ICONS.briefcase}</span><span class="home-quick__label">Pro</span>
-          </button>
           <button class="home-quick__btn" type="button" data-home-project="writer">
             <span class="home-quick__icon">${ICONS.feather}</span><span class="home-quick__label">Écrire</span>
           </button>

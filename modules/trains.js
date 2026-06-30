@@ -88,11 +88,13 @@ function isParisBoundFromConflans(dep, lineRef, paris = true) {
 export function isConflansBoundFromParisJ(dep) {
   if (dep.lineRef !== 'STIF:Line::C01739:') return false;
   const dest = (dep.destination || '').toLowerCase();
-  // J line trains that pass through Conflans-Fin-d'Oise OR Conflans-Sainte-Honorine
-  // J5 (Conflans-Fin-d'Oise then Mantes branch): Mantes, Vernon, Issou, Argenteuil, Houilles
-  // J6 (Conflans-Sainte-Honorine then Gisors branch): Gisors, Boissy-l'Aillerie, Pontoise (via SH)
-  // J3 (Conflans-FdO via Pontoise): rarely
-  return ['mantes', 'vernon', 'issou', 'gisors', 'boissy', 'pontoise', 'porcheville'].some(t => dest.includes(t));
+  // The Mantes line leaves Saint-Lazare by TWO routes: via Poissy (does NOT
+  // serve Conflans) and via Conflans-Sainte-Honorine (rive droite). Exclude
+  // anything routed via Poissy, and the Vernon/Rouen axis which is also via
+  // Poissy — these were wrongly shown as Conflans-bound.
+  if (dest.includes('poissy') || dest.includes('vernon') || dest.includes('rouen')) return false;
+  // Destinations reached via Conflans-Sainte-Honorine (rive droite).
+  return ['mantes', 'issou', 'porcheville', 'gisors', 'boissy', 'pontoise', 'conflans'].some(t => dest.includes(t));
 }
 
 // Determine if a J train going west passes through Conflans Fin d'Oise (primary) vs SH (backup)

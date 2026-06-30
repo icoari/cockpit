@@ -311,7 +311,10 @@ export class HomeWidget {
   // the current location (toward Paris from home, toward Conflans from Paris).
   transportTile(tr) {
     const dirLabel = tr ? (tr.direction === 'retour' ? '→ Conflans' : '→ Paris') : '';
-    const row = (kind, dep) => {
+    // Small destination label only for the RER A in the Paris→Conflans sense
+    // (its western branches differ — useful to see which one).
+    const rerRetour = !!tr && tr.direction === 'retour';
+    const row = (kind, dep, showLabel) => {
       const name = kind === 'j' ? 'J' : 'RER A';
       if (!dep) {
         return `<div class="home-train"><span class="home-train__line line-${kind}">${name}</span><span class="home-train__time">—</span><span class="home-train__in">—</span></div>`;
@@ -319,14 +322,17 @@ export class HomeWidget {
       const mins = Math.round((dep.expectedMs - Date.now()) / 60000);
       const time = new Date(dep.expectedMs).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
       const when = dep.cancelled ? 'supprimé' : (mins <= 0 ? 'à quai' : mins <= 1 ? 'imminent' : `${mins} min`);
+      const label = (showLabel && dep.destination)
+        ? `<span class="home-train__dest">${escapeHTML(dep.destination)}</span>` : '';
       return `<div class="home-train ${dep.cancelled ? 'home-train--cancel' : ''}">
         <span class="home-train__line line-${kind}">${name}</span>
         <span class="home-train__time">${time}</span>
+        ${label}
         <span class="home-train__in">${when}</span>
       </div>`;
     };
     const body = tr
-      ? `<div class="home-trains">${row('j', tr.j)}${row('rer', tr.rer)}</div>`
+      ? `<div class="home-trains">${row('j', tr.j, false)}${row('rer', tr.rer, rerRetour)}</div>`
       : `<div class="home-train__empty">Prochains départs · ouvre Trains</div>`;
     return `
       <button class="home-tile home-tile--wide" type="button" data-goto="trains">

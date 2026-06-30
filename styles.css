@@ -383,7 +383,7 @@ body.theme-light .home-greeting::before {
 /* Wide transport tile — next J + next RER for the location-based direction */
 .home-tile--wide { grid-column: span 2; }
 .home-trains { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
-.home-train { display: flex; align-items: center; gap: 9px; }
+.home-train { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .home-train__line {
   font-size: 10px; font-weight: 700; color: #fff;
   padding: 2px 7px; border-radius: 5px; min-width: 38px; text-align: center;
@@ -391,8 +391,13 @@ body.theme-light .home-greeting::before {
 }
 .home-train__line.line-j   { background: #8B8000; }   /* Transilien J — olive */
 .home-train__line.line-rer { background: #D1002A; }   /* RER A — rouge */
-.home-train__time { font-size: 16px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
-.home-train__in { font-size: 11px; color: var(--text-dim); margin-left: auto; }
+.home-train__time { font-size: 16px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; flex-shrink: 0; }
+/* Small destination label (RER retour only) — one line, never overflow. */
+.home-train__dest {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; color: var(--text-dim);
+}
+.home-train__in { font-size: 11px; color: var(--text-dim); margin-left: auto; flex-shrink: 0; }
 .home-train--cancel .home-train__time { text-decoration: line-through; color: var(--text-faint); }
 .home-train--cancel .home-train__in { color: var(--danger); }
 .home-train__empty { font-size: 11.5px; color: var(--text-faint); margin-top: 8px; }

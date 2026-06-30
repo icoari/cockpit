@@ -1,4 +1,4 @@
-const CACHE = 'bob-v59';
+const CACHE = 'bob-v60';
 const ASSETS = [
   './',
   './index.html',
@@ -105,6 +105,7 @@ self.addEventListener('push', (event) => {
     data: { url: payload.url || '/' },
     renotify: payload.renotify === true,
     requireInteraction: payload.requireInteraction === true,
+    actions: Array.isArray(payload.actions) ? payload.actions.slice(0, 2) : undefined,
   };
   event.waitUntil(self.registration.showNotification(title, opts));
 });

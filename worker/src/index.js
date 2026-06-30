@@ -23,6 +23,8 @@ const KEY_MONITORING = KV_PREFIX + 'monitoring';
 const KEY_ALERTED_DISRUPTIONS = KV_PREFIX + 'alertedDisruptions';
 const KEY_HEALTH_PING = KV_PREFIX + 'healthPing';
 const KEY_LAST_TRAIN_ALERTED = KV_PREFIX + 'lastTrainAlerted';
+const KEY_TREATMENT = KV_PREFIX + 'treatment';      // medication schedule
+const KEY_MED_STATE = KV_PREFIX + 'medState';        // today's taken/alerted doses
 
 // Curated baseline sources merged with the user's own — these stay fresh
 // even before the user has configured anything on a new device.
@@ -68,6 +70,8 @@ export default {
 
       if (p === '/monitoring')          return await handleMonitoring(request, env);
       if (p === '/health/ping')         return assertMethod(request, 'POST', () => handleHealthPing(request, env));
+      if (p === '/health/treatment')    return await handleTreatment(request, env);
+      if (p === '/health/med')          return assertMethod(request, 'POST', () => handleMed(request, env));
       if (p === '/cron/run')            return assertMethod(request, 'POST', () => handleCronRun(request, env, url));
 
       if (p === '/llm')                 return assertMethod(request, 'POST', () => handleLlm(request, env));
@@ -90,6 +94,7 @@ export default {
       ctx.waitUntil(aggregateFeed(env));
     } else if (cron === '*/5 6-23 * * *') {
       ctx.waitUntil(checkDisruptions(env));
+      ctx.waitUntil(checkMedicationReminders(env));
     } else if (cron === '0 5 * * *') {
       ctx.waitUntil(sendMorningBriefPush(env));
     } else if (cron === '0 16 * * *') {
@@ -274,6 +279,8 @@ async function handleWipe(request, env) {
   await env.KV.delete(KEY_HEALTH_PING);
   await env.KV.delete(KEY_ALERTED_DISRUPTIONS);
   await env.KV.delete(KEY_LAST_TRAIN_ALERTED);
+  await env.KV.delete(KEY_TREATMENT);
+  await env.KV.delete(KEY_MED_STATE);
   return json({ ok: true });
 }
 
@@ -393,6 +400,7 @@ async function handleCronRun(request, env, url) {
     case 'last-trains':  await checkLastTrainsTonight(env); break;
     case 'brief':        await sendMorningBriefPush(env); break;
     case 'health':       await sendHealthReminder(env); break;
+    case 'med':          await checkMedicationReminders(env); break;
     default: return json({ error: 'unknown task' }, 400);
   }
   return json({ ok: true, task });
@@ -407,6 +415,50 @@ async function handleHealthPing(request, env) {
     return json({ error: 'date and slot required' }, 400);
   }
   await env.KV.put(KEY_HEALTH_PING, JSON.stringify({ lastEntryDate: date, lastSlot: slot, ts: Date.now() }));
+  return json({ ok: true });
+}
+
+// Treatment schedule pushed by the health app — times, cycle, on/off. Stored
+// in its own KV key (not the encrypted sync blob) so the reminder cron can
+// read it without user interaction.
+async function handleTreatment(request, env) {
+  if (!await verifyAuth(request, env)) return json({ error: 'unauthorized' }, 401);
+  if (request.method === 'GET') {
+    const raw = await env.KV.get(KEY_TREATMENT);
+    return new Response(raw || '{}', { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders() } });
+  }
+  if (request.method === 'POST') {
+    let body;
+    try { body = await request.json(); } catch { return json({ error: 'invalid json' }, 400); }
+    const t = {
+      startDate: typeof body.startDate === 'string' ? body.startDate : null,
+      cycleOn: Number(body.cycleOn) || 30,
+      cycleOff: Number(body.cycleOff) || 5,
+      months: Number(body.months) || 6,
+      doses: Array.isArray(body.doses) ? body.doses.filter(s => typeof s === 'string') : ['matin', 'midi', 'soir'],
+      times: (body.times && typeof body.times === 'object') ? body.times : {},
+      med: typeof body.med === 'string' ? body.med : 'Trimébutine',
+      enabled: body.enabled !== false,
+    };
+    if (!t.startDate || !/^\d{4}-\d{2}-\d{2}$/.test(t.startDate)) return json({ error: 'startDate required (YYYY-MM-DD)' }, 400);
+    await env.KV.put(KEY_TREATMENT, JSON.stringify(t));
+    return json({ ok: true });
+  }
+  return json({ error: 'method not allowed' }, 405);
+}
+
+// Which doses are already taken today — suppresses their reminders.
+async function handleMed(request, env) {
+  if (!await verifyAuth(request, env)) return json({ error: 'unauthorized' }, 401);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'invalid json' }, 400); }
+  const { date, taken } = body || {};
+  if (typeof date !== 'string') return json({ error: 'date required' }, 400);
+  const raw = await env.KV.get(KEY_MED_STATE);
+  let st = raw ? JSON.parse(raw) : null;
+  if (!st || st.date !== date) st = { date, taken: [], alerted: [] };
+  st.taken = Array.isArray(taken) ? taken.filter(s => typeof s === 'string') : [];
+  await env.KV.put(KEY_MED_STATE, JSON.stringify(st));
   return json({ ok: true });
 }
 
@@ -519,6 +571,79 @@ async function sendHealthReminder(env) {
     tag: 'bob-health',
     url: '/?goto=projets',
   }, { urgency: 'low' });
+}
+
+// Medication reminders — pushes at each meal time on ON-days only, once per
+// dose per day, and never for a dose already logged. Runs on the */5 6-23
+// cron (5-min granularity is plenty for a "take it around now" nudge).
+async function checkMedicationReminders(env) {
+  const traw = await env.KV.get(KEY_TREATMENT);
+  if (!traw) return;
+  const t = JSON.parse(traw);
+  if (t.enabled === false) return;
+
+  const { dateKey, minutes } = parisNow();
+  const info = treatmentDayInfo(t, dateKey);
+  if (!info.on) return;                 // pause day, before start, or finished
+
+  const doses = Array.isArray(t.doses) && t.doses.length ? t.doses : ['matin', 'midi', 'soir'];
+  const times = t.times || {};
+
+  const raw = await env.KV.get(KEY_MED_STATE);
+  let st = raw ? JSON.parse(raw) : null;
+  if (!st || st.date !== dateKey) st = { date: dateKey, taken: [], alerted: [] };
+
+  const LABEL = { matin: 'du matin', midi: 'du midi', soir: 'du soir' };
+  let changed = false;
+  for (const slot of doses) {
+    const hhmm = times[slot];
+    if (!hhmm || !/^\d{1,2}:\d{2}$/.test(hhmm)) continue;
+    const [hh, mm] = hhmm.split(':').map(Number);
+    const slotMin = hh * 60 + mm;
+    if (minutes < slotMin) continue;             // not time yet
+    if (minutes > slotMin + 120) continue;       // window passed — no late spam
+    if (st.taken.includes(slot)) continue;       // already logged
+    if (st.alerted.includes(slot)) continue;     // already reminded today
+
+    const ok = await pushOne(env, {
+      title: `${t.med || 'Traitement'} — prise ${LABEL[slot] || slot}`,
+      body: 'À prendre au cours du repas. Tape pour valider la prise.',
+      tag: `bob-med-${dateKey}-${slot}`,
+      url: `/?goto=projets&project=health&dose=${slot}`,
+      actions: [{ action: 'taken', title: 'Pris' }],
+      renotify: true,
+    }, { urgency: 'high', ttl: 4 * 3600 });
+    if (ok) { st.alerted.push(slot); changed = true; }
+  }
+  if (changed) await env.KV.put(KEY_MED_STATE, JSON.stringify(st));
+}
+
+// Paris-local "today" key (YYYY-MM-DD) + minute-of-day.
+function parisNow() {
+  const now = new Date();
+  const dateKey = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(now);
+  const { h, m } = parisHourMin(now.getTime());
+  return { dateKey, minutes: h * 60 + m };
+}
+
+// Is `dateKey` an ON-day of the treatment? Cycles of cycleOn ON + cycleOff
+// OFF, capped at `months` cycles. Day diff computed at 00:00 UTC for both
+// endpoints (we only need whole-day distance).
+function treatmentDayInfo(t, dateKey) {
+  const start = Date.parse(t.startDate + 'T00:00:00Z');
+  const cur = Date.parse(dateKey + 'T00:00:00Z');
+  if (isNaN(start) || isNaN(cur)) return { on: false };
+  const diff = Math.floor((cur - start) / 86400000);
+  if (diff < 0) return { on: false };
+  const on = Number(t.cycleOn) || 30;
+  const off = Number(t.cycleOff) || 5;
+  const months = Number(t.months) || 6;
+  const len = on + off;
+  const cycle = Math.floor(diff / len) + 1;
+  if (cycle > months) return { on: false };
+  return { on: (diff % len) < on, cycle };
 }
 
 // IDFM disruption watch — checks the user's lines and pushes once per

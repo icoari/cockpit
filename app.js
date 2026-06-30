@@ -124,8 +124,29 @@ function initTabs() {
 
   // App opens on Accueil, unless a push notification deep-links to a tab
   // (?goto=trains|pro|…).
-  const goto = new URLSearchParams(location.search).get('goto');
+  const params = new URLSearchParams(location.search);
+  const goto = params.get('goto');
   setActiveTab(VISIBLE_TABS.includes(goto) ? goto : 'home');
+
+  // A medication reminder deep-links into the health project on a dose
+  // (?project=health&dose=midi) — open it after the shell settles.
+  if (params.get('project') === 'health') {
+    const dose = params.get('dose') || undefined;
+    setTimeout(() => openProject('health', { dose }), 200);
+  }
+}
+
+// Route a notification URL (carrying ?goto / ?project / ?dose) without reload.
+function routeNotificationUrl(rawUrl) {
+  try {
+    const u = new URL(rawUrl, location.href);
+    const tab = u.searchParams.get('goto');
+    if (VISIBLE_TABS.includes(tab)) setActiveTab(tab);
+    if (u.searchParams.get('project') === 'health') {
+      const dose = u.searchParams.get('dose') || undefined;
+      openProject('health', { dose });
+    }
+  } catch {}
 }
 
 // ---------- Widgets ----------
@@ -296,6 +317,9 @@ function openProject(name, opts = {}) {
   if (name === 'health') {
     const currentTheme = getSettings().theme || 'auto';
     const cacheBust = Date.now();
+    // A medication reminder deep-links to a specific dose (?dose=midi) so the
+    // health app opens straight onto it and marks it taken.
+    const doseParam = opts.dose ? `&dose=${encodeURIComponent(opts.dose)}` : '';
     inner.innerHTML = `
       <div class="project-shell">
         <div class="project-bar">
@@ -303,7 +327,7 @@ function openProject(name, opts = {}) {
           <span class="project-bar__title">Suivi santé</span>
           <button class="project-bar__action" type="button" data-action="analyze" aria-label="Analyse">${ICONS.lightbulb}</button>
         </div>
-        <iframe class="project-frame" src="../health-tracker/?theme=${encodeURIComponent(currentTheme)}&_v=${cacheBust}" allow="vibrate"></iframe>
+        <iframe class="project-frame" src="../health-tracker/?theme=${encodeURIComponent(currentTheme)}${doseParam}&_v=${cacheBust}" allow="vibrate"></iframe>
         <div class="insights-overlay" hidden data-insights-overlay>
           <div class="insights-panel">
             <div class="insights-panel__head">
@@ -721,9 +745,6 @@ if ('serviceWorker' in navigator) {
   // route the ?goto= tab without a reload.
   navigator.serviceWorker.addEventListener('message', (e) => {
     if (e.data?.type !== 'notification-clicked') return;
-    try {
-      const goto = new URL(e.data.url, location.href).searchParams.get('goto');
-      if (VISIBLE_TABS.includes(goto)) setActiveTab(goto);
-    } catch {}
+    routeNotificationUrl(e.data.url);
   });
 }

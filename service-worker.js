@@ -1,4 +1,4 @@
-const CACHE = 'bob-v62';
+const CACHE = 'bob-v63';
 const ASSETS = [
   './',
   './index.html',
@@ -91,10 +91,16 @@ self.addEventListener('fetch', (e) => {
 // ---------- Web Push ----------
 self.addEventListener('push', (event) => {
   let payload = {};
-  try {
-    payload = event.data ? event.data.json() : {};
-  } catch {
-    payload = { title: 'Bob', body: event.data ? event.data.text() : '' };
+  if (event.data) {
+    // Decode the raw bytes as UTF-8 explicitly. On iOS WebKit, event.data.json()
+    // / .text() can mis-decode multi-byte UTF-8 (accents → mojibake), so we go
+    // through the ArrayBuffer + TextDecoder, which is reliable everywhere.
+    try {
+      const text = new TextDecoder('utf-8').decode(event.data.arrayBuffer());
+      payload = JSON.parse(text);
+    } catch {
+      try { payload = event.data.json(); } catch { payload = {}; }
+    }
   }
   const title = payload.title || 'Bob';
   const opts = {

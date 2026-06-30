@@ -383,10 +383,15 @@ body.theme-light .home-greeting::before {
 /* Weather tile — big current temp, condition, day's min/max pinned to bottom
    so the content fills the tile instead of floating in a corner. */
 .home-tile--weather { gap: 2px; }
+.home-weather__main {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px;
+}
 .home-weather__temp {
   font-size: 30px; font-weight: 700; letter-spacing: -0.02em;
-  color: var(--text); line-height: 1.05; font-variant-numeric: tabular-nums; margin-top: 2px;
+  color: var(--text); line-height: 1.05; font-variant-numeric: tabular-nums;
 }
+.home-weather__icon { display: inline-flex; flex-shrink: 0; color: var(--text-dim); }
+.home-weather__icon svg { width: 30px; height: 30px; }
 .home-weather__minmax {
   display: flex; gap: 12px; margin-top: auto; padding-top: 8px;
   font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-dim);

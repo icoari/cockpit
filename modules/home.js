@@ -2,7 +2,7 @@
 // (weather, agenda, trains, top brief items, project status) and lets the
 // LLM open with a 2-3 sentence contextual opener.
 
-import { ICONS } from './icons.js';
+import { ICONS, weatherCodeIcon } from './icons.js';
 import { escapeHTML, fetchWithTimeout, timeAgo, haptic, safeUrl } from './util.js';
 import { getSettings, getState, cacheGet, cacheSet } from './state.js';
 import { isConfigured as llmConfigured, complete } from './llm.js';
@@ -304,10 +304,15 @@ export class HomeWidget {
     const minmax = (w && w.tMin != null && w.tMax != null)
       ? `<span class="home-weather__minmax"><span>↓&nbsp;${w.tMin}°</span><span>↑&nbsp;${w.tMax}°</span></span>`
       : '';
+    const hour = (c.now || new Date()).getHours();
+    const isDay = hour >= 7 && hour < 21;
     const weatherTile = w ? `
       <button class="home-tile home-tile--weather" type="button" data-goto="perso">
         <span class="home-tile__label">Météo</span>
-        <span class="home-weather__temp">${w.temp}°</span>
+        <span class="home-weather__main">
+          <span class="home-weather__temp">${w.temp}°</span>
+          <span class="home-weather__icon">${weatherCodeIcon(w.code, isDay)}</span>
+        </span>
         <span class="home-tile__sub">${escapeHTML(weatherLabelFromCode(w.code))}</span>
         ${minmax}
       </button>` : '';

@@ -176,7 +176,11 @@ function mergeDeep(target, source) {
     // Guard against prototype pollution from imported JSON / sync blobs.
     if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
     if (source[k] && typeof source[k] === 'object' && !Array.isArray(source[k])) {
-      target[k] = mergeDeep(target[k] || {}, source[k]);
+      // The merge base must be a plain object — a truthy primitive in target
+      // (e.g. theme:'auto' vs a corrupted {} in the blob) would otherwise be
+      // recursed into and throw at module load, bricking the app at boot.
+      const base = (target[k] && typeof target[k] === 'object' && !Array.isArray(target[k])) ? target[k] : {};
+      target[k] = mergeDeep(base, source[k]);
     } else {
       target[k] = source[k];
     }
@@ -189,26 +193,40 @@ export function getSettings() { return state.settings; }
 
 export function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); }
-  catch (e) { console.error('Storage failed', e); }
+  catch (e) {
+    // Persist failed (quota / private mode). Do NOT push: the cloud would get
+    // a state this device can't hold, and the next reconcile would pull it
+    // back, reload onto the OLD persisted copy and re-push that — a reload
+    // churn loop that overwrites newer remote data.
+    console.error('Storage failed — skipping cloud push', e);
+    return;
+  }
   schedulePush(buildSyncPayload);
 }
 
-// Snapshot for cloud sync — strips the OAuth token, the volatile cache AND
-// per-device UI state (active tab, searches) so that navigating around on
-// one device doesn't count as a data change and trigger pushes/pulls on
-// the others.
-export function buildSyncPayload() {
+// One snapshot builder for both cloud sync and file export. Strips volatile
+// cache, per-device UI state, and credentials that must never leave the
+// device in plaintext (OAuth token; API keys only for the plaintext export —
+// the sync blob is E2E-encrypted so keys may ride it).
+function buildSnapshot({ stripApiKeys = false } = {}) {
   const snapshot = structuredClone(state);
   if (snapshot.settings?.calendar) snapshot.settings.calendar.token = null;
   delete snapshot.cache;
-  delete snapshot.feedSearch;
   if (snapshot.settings) delete snapshot.settings.activeTab;
-  return JSON.stringify({
+  if (stripApiKeys) {
+    if (snapshot.settings?.llm)  snapshot.settings.llm.apiKey = '';
+    if (snapshot.settings?.idfm) snapshot.settings.idfm.apiKey = '';
+  }
+  return {
     ...snapshot,
     _writer: readLocalJSON(WRITER_KEY),
     _healthTracker: readLocalJSON(HEALTH_KEY),
     _notes: readLocalJSON(NOTES_KEY),
-  });
+  };
+}
+
+export function buildSyncPayload() {
+  return JSON.stringify(buildSnapshot());
 }
 
 export function updateSettings(patch) {
@@ -264,10 +282,6 @@ export function removeEncombrantDate(dateIso) {
   state.settings.encombrants.extraDates = (state.settings.encombrants.extraDates || []).filter(d => d !== dateIso);
   save();
 }
-export function setEncombrantPattern(p) {
-  state.settings.encombrants.pattern = p;
-  save();
-}
 
 // Cache helpers
 export function cacheGet(key, ttlMs) {
@@ -298,21 +312,9 @@ function readLocalJSON(key) {
 }
 
 export function exportData() {
-  // Build a clean snapshot:
-  //  - omit calendar OAuth token + LLM API key (would leak credentials)
-  //  - omit volatile cache (recreated on first use)
-  //  - include the writer chapters AND the health-tracker entries
-  //    (both live in separate localStorage keys on the same origin)
-  const snapshot = structuredClone(state);
-  if (snapshot.settings?.calendar) snapshot.settings.calendar.token = null;
-  if (snapshot.settings?.llm)      snapshot.settings.llm.apiKey = '';
-  delete snapshot.cache;
-  return JSON.stringify({
-    ...snapshot,
-    _writer: readLocalJSON(WRITER_KEY),
-    _healthTracker: readLocalJSON(HEALTH_KEY),
-    _notes: readLocalJSON(NOTES_KEY),
-  }, null, 2);
+  // Plaintext backup file → strip ALL credentials (LLM + IDFM keys, OAuth
+  // token). importData re-injects the device's own keys on restore.
+  return JSON.stringify(buildSnapshot({ stripApiKeys: true }), null, 2);
 }
 
 export function importData(json) {

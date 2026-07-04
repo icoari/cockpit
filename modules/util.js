@@ -6,7 +6,7 @@ export function formatDateLong(d) {
 }
 
 export function timeAgo(date) {
-  if (!date || Number.isNaN(date.getTime?.())) return '';
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
   const diff = (Date.now() - date.getTime()) / 1000;
   if (diff < 60) return 'à l\'instant';
   if (diff < 3600) return `il y a ${Math.floor(diff / 60)} min`;
@@ -66,6 +66,15 @@ export function uid() {
 export function safeJSON(value, fallback) {
   if (value == null) return fallback;
   try { return JSON.parse(value); } catch { return fallback; }
+}
+
+// Pull the first JSON object out of an LLM reply — tolerates ```json fences
+// and prose around the braces. Throws if nothing parseable is found.
+export function extractJson(text) {
+  let raw = (text || '').trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  const m = raw.match(/\{[\s\S]*\}/);
+  if (m) raw = m[0];
+  return JSON.parse(raw);
 }
 
 // Haptic feedback (Android only; iOS no-op)

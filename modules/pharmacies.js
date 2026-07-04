@@ -9,77 +9,83 @@ const OVERPASS = 'https://overpass-api.de/api/interpreter';
 
 const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
+// Parse an opening_hours spec into the intervals that apply on a given
+// weekday index (0=Sunday). One implementation for isOpenNow AND closesSoon
+// (they were ~35 duplicated lines). Returns { matched, intervals } where
+// `matched` says whether ANY rule in the spec parsed — unparseable specs
+// (sunrise-sunset, localized syntax) must read as "unknown", not "closed".
+function intervalsForDay(spec, wdIdx) {
+  const wd = DAYS[wdIdx];
+  let matched = false;
+  const intervals = [];
+  for (const rule of spec.split(';').map(r => r.trim()).filter(Boolean)) {
+    const m = rule.match(/^(.*?)(\d{1,2}:\d{2}-\d{1,2}:\d{2}(?:,\d{1,2}:\d{2}-\d{1,2}:\d{2})*)\s*$/);
+    if (!m) continue;
+    matched = true;
+    const dayPart = m[1].trim();
+    let applies = !dayPart;
+    if (dayPart) {
+      for (const seg of dayPart.split(',').map(s => s.trim())) {
+        if (seg.includes('-')) {
+          const [start, end] = seg.split('-').map(s => s.trim());
+          const sI = DAYS.indexOf(start), eI = DAYS.indexOf(end);
+          if (sI < 0 || eI < 0) continue;
+          if (sI <= eI && wdIdx >= sI && wdIdx <= eI) { applies = true; break; }
+          if (sI > eI && (wdIdx >= sI || wdIdx <= eI)) { applies = true; break; }
+        } else if (seg === wd) { applies = true; break; }
+      }
+    }
+    if (!applies) continue;
+    for (const iv of m[2].split(',')) {
+      const [from, to] = iv.split('-');
+      const [fh, fm] = from.split(':').map(Number);
+      const [th, tm] = to.split(':').map(Number);
+      intervals.push({ fromMin: fh * 60 + fm, toMin: th * 60 + tm });
+    }
+  }
+  return { matched, intervals };
+}
+
+// true / false / null (unknown). Handles overnight ranges (22:00-06:00):
+// covered tonight from today's rule, and before dawn from yesterday's rule.
 function isOpenNow(spec) {
   if (!spec) return null;
   const trimmed = spec.trim();
   if (trimmed === '24/7') return true;
   const now = new Date();
-  const wd = DAYS[now.getDay()];
-  const wdIdx = now.getDay();
   const minutes = now.getHours() * 60 + now.getMinutes();
-  const rules = trimmed.split(';').map(r => r.trim()).filter(Boolean);
-  for (const rule of rules) {
-    const m = rule.match(/^(.*?)(\d{1,2}:\d{2}-\d{1,2}:\d{2}(?:,\d{1,2}:\d{2}-\d{1,2}:\d{2})*)\s*$/);
-    if (!m) continue;
-    const dayPart = m[1].trim();
-    const timePart = m[2];
-    let appliesToday = false;
-    if (!dayPart) appliesToday = true;
-    else {
-      const segments = dayPart.split(',').map(s => s.trim());
-      for (const seg of segments) {
-        if (seg.includes('-')) {
-          const [start, end] = seg.split('-').map(s => s.trim());
-          const sI = DAYS.indexOf(start), eI = DAYS.indexOf(end);
-          if (sI < 0 || eI < 0) continue;
-          if (sI <= eI && wdIdx >= sI && wdIdx <= eI) { appliesToday = true; break; }
-          if (sI > eI && (wdIdx >= sI || wdIdx <= eI)) { appliesToday = true; break; }
-        } else if (seg === wd) { appliesToday = true; break; }
-      }
-    }
-    if (!appliesToday) continue;
-    for (const iv of timePart.split(',')) {
-      const [from, to] = iv.split('-');
-      const [fh, fm] = from.split(':').map(Number);
-      const [th, tm] = to.split(':').map(Number);
-      if (minutes >= fh*60+fm && minutes < th*60+tm) return true;
-    }
+  const today = intervalsForDay(trimmed, now.getDay());
+  const yesterday = intervalsForDay(trimmed, (now.getDay() + 6) % 7);
+  if (!today.matched && !yesterday.matched) return null;   // unparseable → unknown
+  for (const { fromMin, toMin } of today.intervals) {
+    if (toMin > fromMin) { if (minutes >= fromMin && minutes < toMin) return true; }
+    else if (minutes >= fromMin) return true;              // overnight, evening leg
+  }
+  for (const { fromMin, toMin } of yesterday.intervals) {
+    if (toMin <= fromMin && minutes < toMin) return true;  // overnight, morning leg
   }
   return false;
 }
 
+// Minutes until closing if ≤ 60, else null.
 function closesSoon(spec) {
   if (!spec) return null;
-  if (spec.trim() === '24/7') return null;
+  const trimmed = spec.trim();
+  if (trimmed === '24/7') return null;
   const now = new Date();
-  const wd = DAYS[now.getDay()];
-  const wdIdx = now.getDay();
   const minutes = now.getHours() * 60 + now.getMinutes();
-  for (const rule of spec.split(';').map(r => r.trim()).filter(Boolean)) {
-    const m = rule.match(/^(.*?)(\d{1,2}:\d{2}-\d{1,2}:\d{2}(?:,\d{1,2}:\d{2}-\d{1,2}:\d{2})*)\s*$/);
-    if (!m) continue;
-    const dayPart = m[1].trim();
-    let appliesToday = false;
-    if (!dayPart) appliesToday = true;
-    else {
-      for (const seg of dayPart.split(',').map(s => s.trim())) {
-        if (seg.includes('-')) {
-          const [s,e] = seg.split('-').map(x=>x.trim());
-          const sI = DAYS.indexOf(s), eI = DAYS.indexOf(e);
-          if (sI < 0 || eI < 0) continue;
-          if (sI <= eI && wdIdx >= sI && wdIdx <= eI) { appliesToday = true; break; }
-          if (sI > eI && (wdIdx >= sI || wdIdx <= eI)) { appliesToday = true; break; }
-        } else if (seg === wd) { appliesToday = true; break; }
-      }
+  const today = intervalsForDay(trimmed, now.getDay());
+  const yesterday = intervalsForDay(trimmed, (now.getDay() + 6) % 7);
+  for (const { fromMin, toMin } of today.intervals) {
+    if (toMin > fromMin) {
+      if (minutes >= fromMin && minutes < toMin && toMin - minutes <= 60) return toMin - minutes;
+    } else if (minutes >= fromMin) {
+      const left = toMin + 1440 - minutes;                 // closes tomorrow
+      if (left <= 60) return left;
     }
-    if (!appliesToday) continue;
-    for (const iv of m[2].split(',')) {
-      const [from, to] = iv.split('-');
-      const [fh,fm] = from.split(':').map(Number);
-      const [th,tm] = to.split(':').map(Number);
-      const fM = fh*60+fm, tM = th*60+tm;
-      if (minutes >= fM && minutes < tM && tM - minutes <= 60) return tM - minutes;
-    }
+  }
+  for (const { fromMin, toMin } of yesterday.intervals) {
+    if (toMin <= fromMin && minutes < toMin && toMin - minutes <= 60) return toMin - minutes;
   }
   return null;
 }
@@ -200,8 +206,9 @@ export class PharmaciesWidget {
           fetchOSMHours(pos.lat, pos.lon, radiusKm * 1000),
         ]);
         entries = (finessData.results || []).map(r => {
-          const lat = r.lat, lon = r.lng;
-          if (lat == null || lon == null) return null;
+          // Coerce to numbers — they land in the maps href attribute.
+          const lat = Number(r.lat), lon = Number(r.lng);
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
           const numvoie = r.numvoie ? String(r.numvoie) : '';
           const street = [numvoie, r.typvoie, r.voie].filter(Boolean).join(' ');
           const name = niceCase(r.rs || 'Pharmacie');

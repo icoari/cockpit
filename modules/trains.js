@@ -52,6 +52,10 @@ export function extractDepartures(siri) {
     const lineRef = j.LineRef?.value || '';
     const trainId = j.VehicleJourneyName?.[0]?.value || '';
     const platform = call.DeparturePlatformName?.value || call.ArrivalPlatformName?.value || '';
+    // Route hint ("via Poissy" etc.) — some feeds carry it in DirectionName
+    // or Via rather than the destination display. Second signal for filters.
+    const via = (j.DirectionName?.[0]?.value || '')
+              + ' ' + (Array.isArray(j.Via) ? j.Via.map(v => v?.PlaceName?.[0]?.value || '').join(' ') : '');
     return {
       destination: dest,
       aimed: aimed ? new Date(aimed) : null,
@@ -60,6 +64,7 @@ export function extractDepartures(siri) {
       lineRef,
       trainId,
       platform,
+      via: via.trim(),
     };
   })
   .filter(d => d.expected)
@@ -69,30 +74,46 @@ export function extractDepartures(siri) {
   .sort((a, b) => a.expected - b.expected);
 }
 
+// Nearest Paris RER A station by geolocation (< 50 km sanity bound),
+// falling back to Auber. Shared by the trains tab, the home tile and the
+// last-train widget — was copy-pasted three times.
+export async function nearestParisRerStation(timeout = 5000) {
+  let station = PARIS_RER_A[0];   // Auber default
+  let usedGeoloc = false;
+  try {
+    const pos = await getPosition({ timeout });
+    if (pos) {
+      const sorted = PARIS_RER_A.map(s => ({ ...s, d: distanceKm(pos, s) })).sort((a, b) => a.d - b.d);
+      if (sorted[0].d < 50) { station = sorted[0]; usedGeoloc = true; }
+    }
+  } catch {}
+  return { station, usedGeoloc };
+}
+
 // ---------- Filters per route ----------
-function isParisBoundFromConflans(dep, lineRef, paris = true) {
+function isParisBoundFromConflans(dep, lineRef) {
   if (dep.lineRef !== lineRef) return false;
   const dest = (dep.destination || '').toLowerCase();
-  if (paris) {
-    // J line: Paris-bound = destination contains "saint-lazare" or "paris"
-    // RER A: Paris-bound = destination is one of eastern termini (NOT cergy/poissy)
-    if (lineRef === 'STIF:Line::C01739:') return dest.includes('saint-lazare') || dest.includes('paris');
-    if (lineRef === 'STIF:Line::C01742:') {
-      const west = ['cergy', 'poissy', 'saint-germain', 'maisons-laffitte'];
-      return !west.some(w => dest.includes(w));
-    }
+  // J line: Paris-bound = destination contains "saint-lazare" or "paris"
+  // RER A: Paris-bound = destination is one of eastern termini (NOT cergy/poissy)
+  if (lineRef === 'STIF:Line::C01739:') return dest.includes('saint-lazare') || dest.includes('paris');
+  if (lineRef === 'STIF:Line::C01742:') {
+    const west = ['cergy', 'poissy', 'saint-germain', 'maisons-laffitte'];
+    return !west.some(w => dest.includes(w));
   }
-  return true;
+  return false;
 }
 
 export function isConflansBoundFromParisJ(dep) {
   if (dep.lineRef !== 'STIF:Line::C01739:') return false;
   const dest = (dep.destination || '').toLowerCase();
+  const route = `${dest} ${(dep.via || '').toLowerCase()}`;
   // The Mantes line leaves Saint-Lazare by TWO routes: via Poissy (does NOT
   // serve Conflans) and via Conflans-Sainte-Honorine (rive droite). Exclude
   // anything routed via Poissy, and the Vernon/Rouen axis which is also via
-  // Poissy — these were wrongly shown as Conflans-bound.
-  if (dest.includes('poissy') || dest.includes('vernon') || dest.includes('rouen')) return false;
+  // Poissy — these were wrongly shown as Conflans-bound. The check reads the
+  // destination display AND the via/direction hint as a second signal.
+  if (route.includes('poissy') || route.includes('vernon') || route.includes('rouen')) return false;
   // Destinations reached via Conflans-Sainte-Honorine (rive droite).
   return ['mantes', 'issou', 'porcheville', 'gisors', 'boissy', 'pontoise', 'conflans'].some(t => dest.includes(t));
 }
@@ -328,16 +349,7 @@ export class TrainsWidget {
   }
 
   async refreshRetourRer(settings, force) {
-    // Use geolocation to pick the nearest Paris RER A station; fallback Auber
-    const pos = await getPosition({ timeout: 5000 });
-    let station = PARIS_RER_A[0]; // Auber default
-    let usedGeoloc = false;
-    if (pos) {
-      // Sort by distance, pick closest (only if reasonably close to Paris)
-      const sorted = PARIS_RER_A.map(s => ({ ...s, d: distanceKm(pos, s) })).sort((a, b) => a.d - b.d);
-      if (sorted[0].d < 50) { station = sorted[0]; usedGeoloc = true; }
-    }
-
+    const { station, usedGeoloc } = await nearestParisRerStation();
     const data = await fetchStop(station.stopRef, settings.idfm.apiKey, { force });
     const all = extractDepartures(data);
     const filtered = all.filter(isConflansBoundFromParisRER).slice(0, 3);
@@ -394,12 +406,7 @@ export async function nextJAndRer() {
         j = soonest(jAll.filter(isConflansBoundFromParisJ));
       } catch {}
       try {
-        let station = PARIS_RER_A[0];
-        const pos = await getPosition({ timeout: 3000 });
-        if (pos) {
-          const s = PARIS_RER_A.map(x => ({ ...x, d: distanceKm(pos, x) })).sort((a, b) => a.d - b.d);
-          if (s[0].d < 50) station = s[0];
-        }
+        const { station } = await nearestParisRerStation(3000);
         const rerAll = extractDepartures(await fetchStop(station.stopRef, settings.idfm.apiKey, {}));
         rer = soonest(rerAll.filter(isConflansBoundFromParisRER));
       } catch {}

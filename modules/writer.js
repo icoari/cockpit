@@ -1,5 +1,5 @@
 import { ICONS } from './icons.js';
-import { escapeHTML, haptic, uid, debounce } from './util.js';
+import { escapeHTML, haptic, uid, debounce, timeAgo } from './util.js';
 import { streamCopilot } from './copilot.js';
 import { isConfigured as llmConfigured } from './llm.js';
 import { VoiceRecorder, voiceSupported } from './voice.js';
@@ -25,17 +25,8 @@ function countWords(text) {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
-function timeAgo(date) {
-  const diff = (Date.now() - new Date(date).getTime()) / 1000;
-  if (diff < 60) return 'à l\'instant';
-  if (diff < 3600) return `il y a ${Math.floor(diff / 60)} min`;
-  if (diff < 86400) return `il y a ${Math.floor(diff / 3600)} h`;
-  if (diff < 86400 * 7) return `il y a ${Math.floor(diff / 86400)} j`;
-  return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(new Date(date));
-}
-
 export class WriterApp {
-  constructor(container, { onExit, openChapterId } = {}) {
+  constructor(container, { onExit } = {}) {
     this.container = container;
     this.onExit = onExit || (() => {});
     this.state = load();
@@ -45,13 +36,7 @@ export class WriterApp {
     // Single persistent delegated click handler — survives every re-render
     this.container.addEventListener('click', (e) => this.handleClick(e));
 
-    // Deep link from Mémoire — open straight into a chapter if it still exists.
-    if (openChapterId && this.state.chapters.some(c => c.id === openChapterId)) {
-      this.currentChapterId = openChapterId;
-      this.renderEditor();
-    } else {
-      this.renderList();
-    }
+    this.renderList();
   }
 
   save() { persist(this.state); }
@@ -60,8 +45,19 @@ export class WriterApp {
     return this.state.chapters.find(c => c.id === this.currentChapterId);
   }
 
+  // Leaving the editor must stop any live dictation — the recorder would keep
+  // the mic hot invisibly (its UI dies with the re-render) and a later stop
+  // would try to write into a chapter that's no longer open.
+  stopDictation() {
+    if (this.recorder) {
+      try { this.recorder.cancel(); } catch {}
+      this.recorder = null;
+    }
+  }
+
   handleClick(e) {
     if (e.target.closest('[data-action="exit"]')) {
+      this.stopDictation();
       this.save();
       this.onExit();
       return;
@@ -73,6 +69,7 @@ export class WriterApp {
     }
     if (e.target.closest('[data-action="back"]')) {
       e.stopPropagation();
+      this.stopDictation();
       this.save();
       this.renderList();
       return;
@@ -120,7 +117,7 @@ export class WriterApp {
           <button class="writer-item" data-open="${c.id}" type="button">
             <div class="writer-item__main">
               <div class="writer-item__title">${escapeHTML(c.title)}</div>
-              <div class="writer-item__meta">${countWords(c.content)} mots · ${timeAgo(c.updatedAt)}</div>
+              <div class="writer-item__meta">${countWords(c.content)} mots · ${timeAgo(new Date(c.updatedAt))}</div>
             </div>
             <span class="writer-item__del" data-del="${c.id}" role="button" aria-label="Supprimer">${ICONS.trash}</span>
           </button>
@@ -173,8 +170,14 @@ export class WriterApp {
     const wordEl = this.container.querySelector('[data-word-count]');
     const statusEl = this.container.querySelector('[data-copilot-status]');
 
+    // Bind to THIS chapter's id, not `this.current()` at call time — a copilot
+    // stream or pending transcription still running after the user navigated
+    // to another chapter would otherwise write chapter A's detached textarea
+    // content into chapter B (silent cross-chapter corruption).
+    const cid = this.currentChapterId;
     const onChange = () => {
-      const c2 = this.current(); if (!c2) return;
+      if (this.currentChapterId !== cid) return;   // navigated away — drop
+      const c2 = this.state.chapters.find(x => x.id === cid); if (!c2) return;
       c2.title = titleEl.value;
       c2.content = contentEl.value;
       c2.updatedAt = new Date().toISOString();
@@ -274,6 +277,12 @@ export class WriterApp {
       statusEl.textContent = 'Une génération est déjà en cours.';
       return;
     }
+    // Mirror of toggleDictation's copilotBusy guard: a stream started while
+    // recording would snapshot the text, then overwrite the dictation insert.
+    if (this.recorder) {
+      statusEl.textContent = 'Dictée en cours — termine-la d\'abord.';
+      return;
+    }
 
     const selStart = contentEl.selectionStart;
     const selEnd = contentEl.selectionEnd;
@@ -327,6 +336,15 @@ export class WriterApp {
       contentEl.setSelectionRange(insertStart, insertStart + acc.length);
       statusEl.textContent = '✓ ' + acc.length + ' caractères';
     } catch (e) {
+      // Nothing streamed → roll back the pre-inserted separator / "> Q · "
+      // prefix (and for expand, the cleared selection) instead of leaving
+      // stray markup in the chapter.
+      if (!acc) {
+        contentEl.value = full;
+        contentEl.setSelectionRange(selStart, selEnd);
+        adjust();
+        onChange();
+      }
       statusEl.textContent = 'Échec : ' + (e.message || e);
     } finally {
       this.copilotBusy = false;

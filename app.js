@@ -18,7 +18,7 @@ import { ProWidget } from './modules/pro.js';
 import { analyzeHealth } from './modules/insights.js';
 import { pushMonitoring } from './modules/notifications.js';
 import { TrackersWidget } from './modules/trackers.js';
-import { loadNotes, addNote, removeNote, notesByCategory, categorizeNote, recap } from './modules/memory.js';
+import { addNote, removeNote, notesByCategory, categorizeNote, recap } from './modules/memory.js';
 import { VoiceRecorder, voiceSupported } from './modules/voice.js';
 
 // ---------- Theme ----------
@@ -135,6 +135,11 @@ function initTabs() {
     const dose = params.get('dose') || undefined;
     setTimeout(() => openProject('health', { dose }), 200);
   }
+
+  // Consume the params: a sync pull triggers location.reload(), which would
+  // otherwise replay them — re-marking a dose the user just un-took, or
+  // forcing the tab back on every pull.
+  if (location.search) history.replaceState(null, '', location.pathname);
 }
 
 // Route a notification URL (carrying ?goto / ?project / ?dose) without reload.
@@ -290,9 +295,10 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('focus', refreshLiveData);
 
 // Live train auto-refresh — force fresh SIRI data so the displayed
-// minute counts never run on a stale 60 s cache.
+// minute counts never run on a stale 60 s cache. Only while the Trains tab
+// is the one on screen (the Accueil tile polls separately).
 setInterval(() => {
-  if (!document.hidden) {
+  if (!document.hidden && getSettings().activeTab === 'trains') {
     try { widgets.trainsAller?.refresh(true); } catch {}
     try { widgets.trainsRetour?.refresh(true); } catch {}
   }
@@ -309,7 +315,13 @@ function openProject(name, opts = {}) {
   const inner = document.getElementById('projectOverlayInner');
   if (!overlay || !inner) return;
 
+  // Projects can register a cleanup (e.g. cancel a live mic recording) that
+  // must run before the DOM is wiped — otherwise the recorder is orphaned
+  // and the mic stays hot with no UI to stop it.
+  const cleanup = { fn: null };
   const close = () => {
+    try { cleanup.fn?.(); } catch {}
+    cleanup.fn = null;
     overlay.hidden = true;
     inner.innerHTML = '';
     document.body.classList.remove('project-open');
@@ -359,7 +371,7 @@ function openProject(name, opts = {}) {
 
   if (name === 'writer') {
     inner.innerHTML = `<div class="project-shell project-shell--writer" id="writerHost"></div>`;
-    new WriterApp(document.getElementById('writerHost'), { onExit: close, openChapterId: opts.openChapterId });
+    new WriterApp(document.getElementById('writerHost'), { onExit: close });
     overlay.hidden = false;
     document.body.classList.add('project-open');
     return;
@@ -390,7 +402,7 @@ function openProject(name, opts = {}) {
     inner.querySelector('[data-close]').addEventListener('click', close);
     overlay.hidden = false;
     document.body.classList.add('project-open');
-    initNotes(inner);
+    cleanup.fn = initNotes(inner);
     return;
   }
 
@@ -580,6 +592,9 @@ function initNotes(scope) {
   // Record → transcribe, then hand the text to `onText`. Renders its own
   // record/stop/working UI in the panel.
   async function captureVoice(label, onText) {
+    // Cancel any previous recorder first — tapping « Note vocale » then
+    // « Récap » must not leave the first one recording with no stop button.
+    if (rec) { try { rec.cancel(); } catch {} rec = null; }
     try { rec = new VoiceRecorder(); await rec.start(); }
     catch (e) { showPanel(`<div class="notes__err">Micro refusé : ${escapeHTML(e.message || '')}</div>`); return; }
     showPanel(`<button class="cv-rec" type="button" data-stop>${ICONS.mic}<span>${escapeHTML(label)} — tape pour arrêter</span></button>`);
@@ -648,12 +663,14 @@ function initNotes(scope) {
   });
 
   renderList();
+
+  // Cleanup for the overlay close — stop a live recording before DOM wipe.
+  return () => { if (rec) { try { rec.cancel(); } catch {} rec = null; } };
 }
 
 // ---------- Health insights panel (lives inside the Suivi santé project shell) ----------
 function tinyMarkdown(s) {
-  const escape = (str) => str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  let html = escape(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  let html = escapeHTML(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/((?:^|\n)(?:- [^\n]+\n?)+)/g, (block) => {
     const items = block.trim().split('\n').map(l => l.replace(/^- /, '')).map(li => `<li>${li}</li>`).join('');
     return `\n<ul>${items}</ul>\n`;
@@ -729,7 +746,10 @@ function openEventDictation() {
   const overlay = document.getElementById('projectOverlay');
   const inner = document.getElementById('projectOverlayInner');
   if (!overlay || !inner) return;
+  let dispose = null;
   const close = () => {
+    try { dispose?.(); } catch {}
+    dispose = null;
     overlay.hidden = true;
     inner.innerHTML = '';
     document.body.classList.remove('project-open');
@@ -745,7 +765,7 @@ function openEventDictation() {
   inner.querySelector('[data-close]').addEventListener('click', close);
   overlay.hidden = false;
   document.body.classList.add('project-open');
-  runEventDictation(document.getElementById('dictateHost'), {
+  dispose = runEventDictation(document.getElementById('dictateHost'), {
     onClose: close,
     onCreated: () => { try { widgets.calendar?.refresh(); } catch {} },
   });
@@ -768,11 +788,13 @@ function reconcile({ throttle = true } = {}) {
   lastReconcileAt = Date.now();
   reconcileInFlight = (async () => {
     try {
-      const result = await startupReconcile(buildSyncPayload);
-      if (result?.state) {
-        importData(JSON.stringify(result.state));
-        location.reload();
-      }
+      // applyState returns false on failure so sync retries the pull next
+      // time instead of marking the remote version as seen.
+      const result = await startupReconcile(buildSyncPayload, (state) => {
+        try { importData(JSON.stringify(state)); return true; }
+        catch (e) { console.warn('[sync] import failed', e); return false; }
+      });
+      if (result?.applied) location.reload();
     } catch {} finally {
       reconcileInFlight = null;
     }

@@ -1,7 +1,7 @@
 import { getSettings, save } from './state.js';
 import { ICONS } from './icons.js';
 import { escapeHTML, haptic, fetchWithTimeout } from './util.js';
-import { WORKER_URL } from './sync.js';
+import { WORKER_URL, getSyncAuthToken } from './sync.js';
 import { VoiceRecorder, voiceSupported } from './voice.js';
 import { complete } from './llm.js';
 
@@ -22,14 +22,6 @@ function loadGIS() {
     document.head.appendChild(s);
   });
   return gisLoadPromise;
-}
-
-function getSyncToken() {
-  try {
-    const raw = localStorage.getItem('bob-sync-v1');
-    const s = raw ? JSON.parse(raw) : null;
-    return s?.authToken || null;
-  } catch { return null; }
 }
 
 // Local cache of the short-lived access token (Worker mints these from the
@@ -59,6 +51,15 @@ function clearToken() {
 
 const SIGN_IN_NEEDED = () => Object.assign(new Error('SIGN_IN_NEEDED'), { silent: true });
 
+// User-facing text for an error — maps the internal sentinel to a real
+// sentence instead of leaking "SIGN_IN_NEEDED" into alerts.
+function friendlyError(e) {
+  const msg = e?.message || String(e);
+  return msg === 'SIGN_IN_NEEDED'
+    ? 'Agenda Google déconnecté — rouvre la carte Agenda et tape « Se connecter à Google ».'
+    : msg;
+}
+
 // One-time interactive consent: GIS authorization-code flow (popup). The code
 // goes to the Worker, which trades it for a refresh token + access token.
 async function interactiveConnect() {
@@ -83,7 +84,7 @@ async function interactiveConnect() {
     client.requestCode();
   });
 
-  const sync = getSyncToken();
+  const sync = getSyncAuthToken();
   if (!sync) throw new Error('Active la sauvegarde cloud — l\'agenda passe par ton Worker.');
   const r = await fetch(`${WORKER_URL}/google/exchange`, {
     method: 'POST',
@@ -100,7 +101,7 @@ async function interactiveConnect() {
 // token. No user interaction. Throws SIGN_IN_NEEDED if there's no refresh
 // token yet (or it was revoked).
 async function refreshViaWorker() {
-  const sync = getSyncToken();
+  const sync = getSyncAuthToken();
   if (!sync) throw SIGN_IN_NEEDED();
   const clientId = getSettings().calendar?.clientId;
   let r;
@@ -368,7 +369,7 @@ export function runEventDictation(host, { onClose = () => {}, onCreated = () => 
     readInputs();
     stage = 'working'; msg = 'Création…'; draw();
     try { for (const ev of parsed) await createEvent(ev.title, ev.date, ev.date, ev.colorId); }
-    catch (e) { return fail('Création : ' + (e.message || e)); }
+    catch (e) { return fail('Création : ' + friendlyError(e)); }
     onCreated();
     onClose();
   }
@@ -438,6 +439,10 @@ export function runEventDictation(host, { onClose = () => {}, onCreated = () => 
   function draw() { host.innerHTML = view(); wire(); }
 
   start();   // auto-start: caller opened this from a live user gesture
+
+  // Dispose hook — the host overlay calls this on close so a live recording
+  // is never orphaned (the « ← Bob » button bypasses our own cancel button).
+  return () => { try { rec?.cancel(); } catch {} };
 }
 
 // ---------- Widget ----------
@@ -569,7 +574,7 @@ export class CalendarWidget {
       haptic(12);
       this.renderBody();
     } catch (e) {
-      alert('Échec de la suppression : ' + e.message);
+      alert('Échec de la suppression : ' + friendlyError(e));
     }
   }
 
@@ -602,7 +607,7 @@ export class CalendarWidget {
       haptic(12);
       await this.refresh();
     } catch (e) {
-      alert('Échec de la création : ' + e.message);
+      alert('Échec de la création : ' + friendlyError(e));
       if (submitBtn) submitBtn.disabled = false;
     }
   }
@@ -641,17 +646,22 @@ export class CalendarWidget {
     this.setBody('<div class="card__loading">Chargement…</div>');
     try {
       // Fetch the visible month +/- one week (covers grid edges + soon events)
+      // Fetch exactly what the 42-cell grid shows: from the Monday before the
+      // 1st through cell 42. A fixed "+7 days" tail missed up to two weeks of
+      // trailing next-month cells (visible but dot-less, wrongly "empty").
       const monthStart = startOfMonth(new Date(this.viewYear, this.viewMonth, 1));
-      const padStart = new Date(monthStart); padStart.setDate(padStart.getDate() - 7);
-      const padEnd   = new Date(this.viewYear, this.viewMonth + 1, 7);
+      const firstWeekday = (monthStart.getDay() + 6) % 7;   // 0 = Monday
+      const padStart = new Date(this.viewYear, this.viewMonth, 1 - firstWeekday);
+      const padEnd   = new Date(this.viewYear, this.viewMonth, 1 - firstWeekday + 42);
       const data = await fetchEventsRange(padStart.toISOString(), padEnd.toISOString());
       this.events = data.items || [];
       this.renderBody();
-      // Subtitle: next event after now
+      // Subtitle: next event that hasn't ENDED yet — an all-day event today
+      // starts at local midnight and must not be skipped as "past".
       const now = new Date();
       const next = this.events
-        .map(ev => ({ ev, d: getEventDate(ev) }))
-        .filter(x => x.d >= now)
+        .map(ev => ({ ev, d: getEventDate(ev), end: getEventEnd(ev) || getEventDate(ev) }))
+        .filter(x => x.end >= now)
         .sort((a, b) => a.d - b.d)[0];
       if (next) {
         const t = fmtEventTime(next.ev);

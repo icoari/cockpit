@@ -5,26 +5,33 @@ import { escapeHTML, fetchWithTimeout, haptic } from './util.js';
 const CACHE_TTL = 30 * 60 * 1000;
 
 async function fetchForecast() {
-  const cached = cacheGet('weatherCard', CACHE_TTL);
-  if (cached) return cached;
   const { lat, lon } = getSettings().location;
   if (lat == null || lon == null) {
     throw new Error('Localisation non configurée — renseigne lat/lon dans les Réglages.');
   }
+  // Coords in the cache key — editing the location in Réglages must not
+  // serve the old place's forecast for up to 30 min.
+  const cacheKey = `weatherCard_${lat}_${lon}`;
+  const cached = cacheGet(cacheKey, CACHE_TTL);
+  if (cached) return cached;
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,is_day,wind_speed_10m,relative_humidity_2m,uv_index&hourly=temperature_2m,precipitation_probability,weather_code,is_day,uv_index&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code,uv_index_max,sunrise,sunset&timezone=Europe%2FParis&forecast_days=3`;
   const resp = await fetchWithTimeout(url, {}, 6000);
   if (!resp.ok) throw new Error(`Météo : HTTP ${resp.status}`);
   const data = await resp.json();
-  cacheSet('weatherCard', data);
+  cacheSet(cacheKey, data);
   return data;
 }
 
 function rainSummary(hourly) {
   const now = Date.now();
-  // Find first hour in next 12h where precipitation prob > 60
-  for (let i = 0; i < hourly.time.length && i < 12; i++) {
+  // First of the next 12 FUTURE hours with precipitation prob ≥ 60. The hourly
+  // series starts at midnight — capping the INDEX at 12 meant the whole
+  // afternoon/evening was past hours and the alert could never fire.
+  let scanned = 0;
+  for (let i = 0; i < hourly.time.length && scanned < 12; i++) {
     const t = new Date(hourly.time[i]).getTime();
     if (t < now) continue;
+    scanned++;
     if ((hourly.precipitation_probability?.[i] ?? 0) >= 60) {
       const when = new Date(hourly.time[i]).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
       return { rain: true, when, prob: hourly.precipitation_probability[i] };
@@ -132,7 +139,8 @@ export class WeatherCard {
       if (e.target.closest('[data-action="refresh"]')) {
         e.stopPropagation();
         haptic(6);
-        cacheBust('weatherCard');
+        const { lat, lon } = getSettings().location || {};
+        cacheBust(`weatherCard_${lat}_${lon}`);
         this.refresh();
       }
     });

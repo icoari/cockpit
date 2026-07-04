@@ -14,7 +14,7 @@
 //   - 'azure'  → api-key: <key>                   (Azure OpenAI, Azure AI Foundry)
 
 import { getSettings } from './state.js';
-import { WORKER_URL } from './sync.js';
+import { WORKER_URL, getSyncAuthToken } from './sync.js';
 
 export function isConfigured() {
   const c = getSettings().llm;
@@ -25,14 +25,6 @@ function getConfig() {
   const c = getSettings().llm || {};
   if (!c.endpoint || !c.apiKey) throw new Error('Assistant non configuré. Va dans Réglages → Assistant.');
   return c;
-}
-
-function getSyncToken() {
-  try {
-    const raw = localStorage.getItem('bob-sync-v1');
-    const s = raw ? JSON.parse(raw) : null;
-    return s?.authToken || null;
-  } catch { return null; }
 }
 
 // Build the body the upstream expects.
@@ -68,7 +60,7 @@ function buildBody(c, messages, opts) {
 // Call the Worker proxy. Returns the raw Response so callers can stream.
 async function callProxy(messages, opts) {
   const c = getConfig();
-  const syncAuth = getSyncToken();
+  const syncAuth = getSyncAuthToken();
   if (!syncAuth) throw new Error('Active d\'abord la sauvegarde cloud — l\'assistant transite par ton Worker.');
 
   const headers = {
@@ -130,18 +122,24 @@ export async function stream(messages, onChunk, opts = {}) {
     }
   };
 
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    const events = splitSSE(buf);
-    buf = events.remainder;
-    for (const ev of events.list) handleEvent(ev);
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const events = splitSSE(buf);
+      buf = events.remainder;
+      for (const ev of events.list) handleEvent(ev);
+    }
+    // Flush the decoder and process whatever's left — the final event isn't
+    // always followed by a blank line.
+    buf += dec.decode();
+    if (buf.trim()) handleEvent(buf);
+  } finally {
+    // A thrown model error (or onChunk exception) must not leave the reader
+    // locked and the connection open.
+    try { reader.cancel(); } catch {}
   }
-  // Flush the decoder and process whatever's left — the final event isn't
-  // always followed by a blank line.
-  buf += dec.decode();
-  if (buf.trim()) handleEvent(buf);
   return full;
 }
 

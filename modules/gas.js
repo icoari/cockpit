@@ -141,12 +141,14 @@ export class GasWidget {
         id: r.id,
         address: nicifyStreet(r.adresse),
         city: r.ville,
-        lat: r.geom?.lat,
-        lon: r.geom?.lon,
+        // Coerce to real numbers — these land in an href attribute, and a
+        // hostile/corrupt string record must not break out of it.
+        lat: Number(r.geom?.lat),
+        lon: Number(r.geom?.lon),
         price: readPrice(r, fuel),
         priceDate: r[`${fuel}_maj`] ? new Date(r[`${fuel}_maj`]) : null,
       }))
-      .filter(s => s.price != null && s.lat && s.lon)
+      .filter(s => s.price != null && Number.isFinite(s.lat) && Number.isFinite(s.lon))
       .map(s => ({ ...s, dist: distanceKm(pos, { lat: s.lat, lon: s.lon }) }));
 
     if (stations.length === 0) {

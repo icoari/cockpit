@@ -1,4 +1,4 @@
-const CACHE = 'bob-v75';
+const CACHE = 'bob-v76';
 const ASSETS = [
   './',
   './index.html',
@@ -36,7 +36,13 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // cache:'reload' bypasses the HTTP cache — GitHub Pages serves max-age=600,
+  // and a version bump must not precache stale copies (mixed old/new modules).
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => c.addAll(ASSETS.map(a => new Request(a, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
@@ -124,7 +130,11 @@ self.addEventListener('notificationclick', (event) => {
   const url = new URL(raw.replace(/^\//, './'), self.registration.scope).href;
   event.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const c of all) {
+    // matchAll returns ALL same-origin clients — on github.io that includes
+    // the standalone health-tracker app, which has no message listener and
+    // would swallow the tap. Only target clients under Bob's scope.
+    const targets = all.filter(c => c.url.startsWith(self.registration.scope));
+    for (const c of targets) {
       if ('focus' in c) {
         try {
           await c.focus();

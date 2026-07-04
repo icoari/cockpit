@@ -2,21 +2,13 @@
 // and exposes it to the Pro page. Sources are pushed up to the Worker so the
 // cron knows what to fetch on this user's behalf.
 
-import { WORKER_URL } from './sync.js';
+import { WORKER_URL, getSyncAuthHeader } from './sync.js';
 import { getSettings, cacheGet, cacheSet } from './state.js';
 
 const FEED_CACHE_TTL = 60_000;
 
-function getAuthHeader() {
-  try {
-    const raw = localStorage.getItem('bob-sync-v1');
-    const s = raw ? JSON.parse(raw) : null;
-    return s?.authToken ? { 'Authorization': `Bearer ${s.authToken}` } : null;
-  } catch { return null; }
-}
-
 export async function pushSources() {
-  const auth = getAuthHeader();
+  const auth = getSyncAuthHeader();
   if (!auth) return;
   const s = getSettings();
   const payload = {
@@ -27,7 +19,9 @@ export async function pushSources() {
     rss: (s.aiSources || []).filter(x => x.type === 'rss').map(x => ({
       id: x.id, name: x.name, url: x.url, enabled: x.enabled, lang: x.lang, category: x.category,
     })),
-    hn: true,
+    // Honour the Hacker News toggle in Réglages — this was hardcoded true, so
+    // disabling HN had no effect on the Worker aggregation.
+    hn: (s.aiSources || []).find(x => x.type === 'hn-algolia')?.enabled !== false,
   };
   try {
     await fetch(`${WORKER_URL}/feed/sources`, {
@@ -43,7 +37,7 @@ export async function fetchFeed({ force = false } = {}) {
     const cached = cacheGet('feed_agg', FEED_CACHE_TTL);
     if (cached) return cached;
   }
-  const auth = getAuthHeader();
+  const auth = getSyncAuthHeader();
   if (!auth) throw new Error('Sync requise pour le feed agrégé.');
   const endpoint = force ? '/feed/refresh' : '/feed';
   const resp = await fetch(`${WORKER_URL}${endpoint}`, {

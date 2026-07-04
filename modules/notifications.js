@@ -1,23 +1,10 @@
 // Web Push subscription + monitoring config sync against the Worker.
 // iOS specifics: push only works for a PWA added to the Home Screen.
 
-import { WORKER_URL } from './sync.js';
+import { WORKER_URL, getSyncAuthHeader } from './sync.js';
 import { getSettings } from './state.js';
 
-function getSyncAuth() {
-  try {
-    const raw = localStorage.getItem('bob-sync-v1');
-    const s = raw ? JSON.parse(raw) : null;
-    return s?.authToken || null;
-  } catch { return null; }
-}
-
-function authedHeaders() {
-  const tok = getSyncAuth();
-  return tok
-    ? { 'Authorization': `Bearer ${tok}` }
-    : null;
-}
+const authedHeaders = getSyncAuthHeader;
 
 export function supportsPush() {
   return ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);

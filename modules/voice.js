@@ -4,15 +4,7 @@
 // and returns the French transcription. Designed for hands-busy / on-the-move
 // capture — dictate a paragraph on the train, drop it straight into a chapter.
 
-import { WORKER_URL } from './sync.js';
-
-function getSyncToken() {
-  try {
-    const raw = localStorage.getItem('bob-sync-v1');
-    const s = raw ? JSON.parse(raw) : null;
-    return s?.authToken || null;
-  } catch { return null; }
-}
+import { WORKER_URL, getSyncAuthToken } from './sync.js';
 
 export function voiceSupported() {
   return !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
@@ -68,6 +60,13 @@ export class VoiceRecorder {
   async stopAndTranscribe() {
     const done = new Promise((resolve) => {
       if (!this.rec) return resolve(new Blob());
+      // If the recorder already stopped on its own (iOS mic interruption:
+      // call, Siri, another app), the 'stop' event fired before we could
+      // listen — resolve with whatever chunks we have instead of hanging
+      // the UI on "Transcription…" forever.
+      if (this.rec.state === 'inactive') {
+        return resolve(new Blob(this.chunks, { type: this.mime || 'audio/webm' }));
+      }
       this.rec.addEventListener('stop', () => {
         resolve(new Blob(this.chunks, { type: this.mime || 'audio/webm' }));
       }, { once: true });
@@ -100,14 +99,21 @@ export class VoiceRecorder {
 // so the "mic in use" indicator doesn't linger forever.
 let sharedStream = null;
 let releaseTimer = null;
+let acquirePending = null;   // in-flight getUserMedia — makes acquireMic reentrant
 const MIC_IDLE_RELEASE_MS = 90_000;
 
 async function acquireMic() {
   if (releaseTimer) { clearTimeout(releaseTimer); releaseTimer = null; }
   const live = sharedStream && sharedStream.getAudioTracks().some(t => t.readyState === 'live');
   if (live) return sharedStream;
-  sharedStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  return sharedStream;
+  // Two overlapping start() calls (easy while the permission prompt is up)
+  // must share ONE getUserMedia — a second stream would orphan the first
+  // with its tracks never stopped ("mic in use" stuck on).
+  if (acquirePending) return acquirePending;
+  acquirePending = navigator.mediaDevices.getUserMedia({ audio: true })
+    .then((s) => { sharedStream = s; return s; })
+    .finally(() => { acquirePending = null; });
+  return acquirePending;
 }
 
 function scheduleMicRelease() {
@@ -115,14 +121,14 @@ function scheduleMicRelease() {
   releaseTimer = setTimeout(releaseMic, MIC_IDLE_RELEASE_MS);
 }
 
-export function releaseMic() {
+function releaseMic() {
   if (releaseTimer) { clearTimeout(releaseTimer); releaseTimer = null; }
   try { sharedStream?.getTracks().forEach(t => t.stop()); } catch {}
   sharedStream = null;
 }
 
-export async function transcribeBlob(blob) {
-  const token = getSyncToken();
+async function transcribeBlob(blob) {
+  const token = getSyncAuthToken();
   if (!token) throw new Error('Active la sauvegarde cloud — la dictée transite par ton Worker.');
   const audio = await blobToBase64(blob);
 

@@ -5,18 +5,19 @@ import { escapeHTML, fetchWithTimeout, haptic } from './util.js';
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 async function fetchAir() {
-  const cached = cacheGet('air', CACHE_TTL);
-  if (cached) return cached;
   const { lat, lon } = getSettings().location;
   if (lat == null || lon == null) {
     throw new Error('Localisation non configurée — renseigne lat/lon dans les Réglages.');
   }
+  const cacheKey = `air_${lat}_${lon}`;   // coords in key — see weatherCard
+  const cached = cacheGet(cacheKey, CACHE_TTL);
+  if (cached) return cached;
   const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=european_aqi,pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,ozone,sulphur_dioxide&hourly=alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen&timezone=Europe%2FParis&forecast_days=1`;
   const resp = await fetchWithTimeout(url, {}, 6000);
   if (!resp.ok) throw new Error(`Air : HTTP ${resp.status}`);
   const data = await resp.json();
   if (data.current?.european_aqi == null) throw new Error('AQI momentanément indisponible');
-  cacheSet('air', data);
+  cacheSet(cacheKey, data);
   return data;
 }
 
@@ -81,7 +82,8 @@ export class AirQualityWidget {
       if (e.target.closest('[data-action="refresh"]')) {
         e.stopPropagation();
         haptic(6);
-        cacheBust('air');
+        const { lat, lon } = getSettings().location || {};
+        cacheBust(`air_${lat}_${lon}`);
         this.refresh();
       }
     });

@@ -6,11 +6,9 @@
 // as `_notes` (see state.js).
 
 import { complete } from './llm.js';
+import { uid, extractJson } from './util.js';
 
 const KEY = 'bob-notes-v1';
-export const SUGGESTED = ['Culture', 'Lieux', 'Idées', 'Courses', 'Travail', 'Perso', 'Divers'];
-
-function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
 export function loadNotes() {
   try {
@@ -28,11 +26,6 @@ export function addNote(text, category) {
   return note;
 }
 export function removeNote(id) { persist(loadNotes().filter(n => n.id !== id)); }
-export function updateNote(id, patch) {
-  const notes = loadNotes();
-  const i = notes.findIndex(n => n.id === id);
-  if (i >= 0) { notes[i] = { ...notes[i], ...patch }; persist(notes); }
-}
 
 // Notes grouped by category, categories ordered by most-recent activity.
 export function notesByCategory() {
@@ -57,10 +50,7 @@ export async function categorizeNote(rawText) {
       [{ role: 'system', content: SYSTEM_CAT }, { role: 'user', content: rawText }],
       { temperature: 0, maxTokens: 300 },
     );
-    let raw = (out || '').trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
-    const m = raw.match(/\{[\s\S]*\}/);
-    if (m) raw = m[0];
-    const o = JSON.parse(raw);
+    const o = extractJson(out);
     return {
       text: (o.text || rawText || '').trim() || fallback.text,
       category: ((o.category || 'Divers').trim() || 'Divers').slice(0, 40),

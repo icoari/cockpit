@@ -3,13 +3,12 @@
 // worth scanning if there's time. That's it.
 
 import { ICONS } from './icons.js';
-import { escapeHTML, timeAgo, haptic, safeUrl, safeCssUrl } from './util.js';
+import { escapeHTML, timeAgo, haptic, safeUrl, safeCssUrl, fetchWithTimeout } from './util.js';
 import { fetchFeed, pushSources } from './feed.js';
 import { isConfigured as llmConfigured } from './llm.js';
 import { generateDigest } from './digest.js';
 import { markAiRead, isAiRead, getSettings } from './state.js';
 import { isSyncEnabled } from './sync.js';
-import { fetchWithTimeout } from './util.js';
 
 const DIGEST_KEY = 'bob-digest-v2';
 const STALE_AFTER_MS = 4 * 60 * 60 * 1000;   // 4 h
@@ -50,7 +49,7 @@ function renderHeadline(item) {
   const href = safeUrl(item.url);
   if (!href) return '';
   return `
-    <a class="pro2-headline ${read ? 'pro2-headline--read' : ''} pro2-headline--${item.kind}"
+    <a class="pro2-headline ${read ? 'pro2-headline--read' : ''} pro2-headline--${escapeHTML(item.kind)}"
        href="${escapeHTML(href)}" target="_blank" rel="noopener noreferrer"
        data-url="${escapeHTML(item.url)}">
       <div class="pro2-headline__eyebrow">

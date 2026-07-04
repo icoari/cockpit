@@ -2,7 +2,7 @@ import {
   getSettings, save,
   addAiSource, toggleAiSource, removeAiSource,
   addYoutubeChannel, toggleYoutubeChannel, removeYoutubeChannel,
-  addEncombrantDate, removeEncombrantDate, setEncombrantPattern,
+  addEncombrantDate, removeEncombrantDate,
   exportData, importData, resetAll, buildSyncPayload,
 } from './state.js';
 import { ENCOMBRANTS_PATTERNS } from './bins.js';
@@ -10,9 +10,9 @@ import { escapeHTML } from './util.js';
 import {
   isSyncEnabled, getSyncMeta, setupSync, unlockSync,
   disableSyncLocally, wipeRemote, pullNow, pushNow, schedulePush, WORKER_URL,
+  getSyncAuthHeader,
 } from './sync.js';
 import { ping as llmPing } from './llm.js';
-import { pushSources } from './feed.js';
 import {
   supportsPush, permissionStatus, subscribePush, unsubscribePush,
   isSubscribed, sendTestPush, pushMonitoring,
@@ -365,6 +365,9 @@ export class SettingsPanel {
         return;
       }
       if (action === 'reset') {
+        // Wipes local state, chapters, health journal AND notes — and the
+        // wiped state then syncs to the cloud. Never one tap.
+        if (!confirm('Tout réinitialiser ? Réglages, chapitres, journal santé et notes seront effacés (et la sauvegarde cloud sera écrasée).')) return;
         resetAll();
         this.render();
         this.onChange();
@@ -397,7 +400,7 @@ export class SettingsPanel {
         statusEl.style.color = '';
         try {
           await pushMonitoring();
-          const auth = { 'Authorization': 'Bearer ' + (JSON.parse(localStorage.getItem('bob-sync-v1') || '{}').authToken || '') };
+          const auth = getSyncAuthHeader() || {};
           const [r1, r2] = await Promise.all([
             fetch(`${WORKER_URL}/cron/run?task=last-trains`, { method: 'POST', headers: auth }),
             fetch(`${WORKER_URL}/cron/run?task=disruptions`, { method: 'POST', headers: auth }),
@@ -602,6 +605,7 @@ export class SettingsPanel {
   }
 
   async runWipe() {
+    if (!confirm('Effacer définitivement la sauvegarde cloud ? Cette action est irréversible.')) return;
     try {
       await wipeRemote();
       this.render();

@@ -1,7 +1,7 @@
 // Writer copilot — strictly creative, no correction-style tasks. The point
 // is to provoke or extend, not to police grammar.
 
-import { complete, stream } from './llm.js';
+import { stream } from './llm.js';
 
 const SYSTEM_WRITER = `Tu es l'assistant d'écriture créatif de Nicolas qui rédige un livre en français.
 Tu respectes scrupuleusement son style : phrases nettes, vocabulaire soutenu sans pédanterie, voix narrative claire.

@@ -2,15 +2,13 @@
 //
 // Cron schedule (UTC):
 //   */10 * * * *     feed aggregation
-//   */15 6-23 * * * IDFM disruption watch + medication reminders
+//   */15 4-23 * * * IDFM disruption watch + medication reminders
 //   0 5 * * *        morning brief push (7h Paris summer)
 //   0 16 * * *       last-train-of-tonight check (18h Paris summer)
 //   0 21 * * *       health-tracker evening reminder (23h Paris summer)
 
 import { sendWebPush } from './webpush.js';
-import {
-  handleTranscribe, handleMemoryIndex, handleMemorySearch, handleMemoryForget,
-} from './ai.js';
+import { handleTranscribe } from './ai.js';
 
 const KV_PREFIX = 'bobsync:';
 const KEY_SALT = KV_PREFIX + 'salt';
@@ -82,11 +80,8 @@ export default {
       if (p === '/google/exchange')     return assertMethod(request, 'POST', () => handleGoogleExchange(request, env));
       if (p === '/google/token')        return assertMethod(request, 'POST', () => handleGoogleToken(request, env));
 
-      // Workers AI (paid plan) — all auth-gated like the LLM proxy.
+      // Workers AI (paid plan) — auth-gated like the LLM proxy.
       if (p === '/transcribe')          return assertMethod(request, 'POST', () => authed(request, env, () => handleTranscribe(request, env, json)));
-      if (p === '/memory/index')        return assertMethod(request, 'POST', () => authed(request, env, () => handleMemoryIndex(request, env, json)));
-      if (p === '/memory/search')       return assertMethod(request, 'POST', () => authed(request, env, () => handleMemorySearch(request, env, json)));
-      if (p === '/memory/forget')       return assertMethod(request, 'DELETE', () => authed(request, env, () => handleMemoryForget(request, env, json)));
 
       return json({ error: 'not found' }, 404);
     } catch (err) {
@@ -98,7 +93,7 @@ export default {
     const cron = event.cron;
     if (cron === '*/10 * * * *') {
       ctx.waitUntil(aggregateFeed(env));
-    } else if (cron === '*/15 6-23 * * *') {
+    } else if (cron === '*/15 4-23 * * *') {
       ctx.waitUntil(checkDisruptions(env));
       ctx.waitUntil(checkMedicationReminders(env));
     } else if (cron === '0 5 * * *') {
@@ -165,20 +160,42 @@ async function verifyAuth(request, env) {
 // /proxy
 // ====================================================================
 
+// Reserved/private IPv4 ranges as [base, mask-bits] — checked on the integer
+// value so odd spellings can't slip past string-prefix tests.
+const BLOCKED_V4 = [
+  [0x00000000, 8],   // 0.0.0.0/8
+  [0x0A000000, 8],   // 10/8
+  [0x64400000, 10],  // 100.64/10 CGNAT
+  [0x7F000000, 8],   // 127/8
+  [0xA9FE0000, 16],  // 169.254/16
+  [0xAC100000, 12],  // 172.16/12
+  [0xC0000000, 24],  // 192.0.0/24
+  [0xC0A80000, 16],  // 192.168/16
+  [0xC6120000, 15],  // 198.18/15
+  [0xE0000000, 4],   // 224/4 multicast
+  [0xF0000000, 4],   // 240/4 reserved (incl. broadcast)
+];
+
+function isBlockedIpv4(h) {
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!m) return false;
+  const parts = m.slice(1).map(Number);
+  if (parts.some(p => p > 255)) return true;   // malformed → block
+  const ip = ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+  return BLOCKED_V4.some(([base, bits]) => (ip >>> (32 - bits)) === (base >>> (32 - bits)));
+}
+
 function isProxyTargetAllowed(target) {
   let u;
   try { u = new URL(target); } catch { return false; }
   if (!['http:', 'https:'].includes(u.protocol)) return false;
   const h = u.hostname.toLowerCase();
   if (h === 'localhost' || h.endsWith('.local') || h.endsWith('.internal')) return false;
-  // Raw IPv6 (URL hostname keeps the brackets) and any IPv4-shaped host in
-  // private/reserved space. Plain-number hosts (decimal/hex IPs) blocked too.
+  // Raw IPv6 (URL hostname keeps the brackets); plain-number hosts
+  // (decimal/hex IPs) blocked too — though the URL parser normalises most.
   if (h.startsWith('[')) return false;
   if (/^\d+$/.test(h) || /^0x[0-9a-f]+$/.test(h)) return false;
-  if (h === '0.0.0.0' || h.startsWith('127.') || h.startsWith('10.')
-      || h.startsWith('169.254.') || h.startsWith('192.168.')
-      || /^172\.(1[6-9]|2\d|3[0-1])\./.test(h)
-      || /^100\.(6[4-9]|[7-9]\d|1[0-2][0-7])\./.test(h)) return false;
+  if (isBlockedIpv4(h)) return false;
   return true;
 }
 
@@ -190,13 +207,25 @@ async function handleProxy(url, request, env) {
   if (!target) return json({ error: 'missing url' }, 400);
   if (!isProxyTargetAllowed(target)) return json({ error: 'target not allowed' }, 400);
 
+  // Follow redirects manually so every hop is re-validated — an allowed public
+  // URL 302-ing to a blocked destination must not bypass the filter.
   let upstream;
   try {
-    upstream = await fetch(target, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; bob-proxy/1.0)' },
-      cf: { cacheTtl: 600, cacheEverything: true },
-      signal: AbortSignal.timeout(10_000),
-    });
+    let current = target;
+    for (let hop = 0; ; hop++) {
+      upstream = await fetch(current, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; bob-proxy/1.0)' },
+        cf: { cacheTtl: 600, cacheEverything: true },
+        redirect: 'manual',
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (![301, 302, 303, 307, 308].includes(upstream.status)) break;
+      const loc = upstream.headers.get('Location');
+      if (!loc || hop >= 3) return json({ error: 'too many redirects' }, 502);
+      const next = new URL(loc, current).toString();
+      if (!isProxyTargetAllowed(next)) return json({ error: 'redirect target not allowed' }, 400);
+      current = next;
+    }
   } catch (e) {
     return json({ error: 'upstream fetch failed: ' + e.message }, 502);
   }
@@ -661,8 +690,8 @@ async function sendHealthReminder(env) {
 }
 
 // Medication reminders — pushes at each meal time on ON-days only, once per
-// dose per day, and never for a dose already logged. Runs on the */15 6-23
-// cron (5-min granularity is plenty for a "take it around now" nudge).
+// dose per day, and never for a dose already logged. Runs on the */15 4-23
+// UTC cron (15-min granularity is plenty for a "take it around now" nudge).
 async function checkMedicationReminders(env) {
   const traw = await env.KV.get(KEY_TREATMENT);
   if (!traw) return;
@@ -692,17 +721,33 @@ async function checkMedicationReminders(env) {
     if (st.taken.includes(slot)) continue;       // already logged
     if (st.alerted.includes(slot)) continue;     // already reminded today
 
+    // No `actions` array: the SW treats an action tap like a body tap anyway,
+    // and the body tap already opens the app on the dose and marks it taken.
     const ok = await pushOne(env, {
       title: `${t.med || 'Traitement'} — prise ${LABEL[slot] || slot}`,
       body: 'À prendre au cours du repas. Tape pour valider la prise.',
       tag: `bob-med-${dateKey}-${slot}`,
       url: `/?goto=projets&project=health&dose=${slot}`,
-      actions: [{ action: 'taken', title: 'Pris' }],
       renotify: true,
     }, { urgency: 'high', ttl: 4 * 3600 });
     if (ok) { st.alerted.push(slot); changed = true; }
   }
-  if (changed) await env.KV.put(KEY_MED_STATE, JSON.stringify(st));
+  if (changed) {
+    // Re-read before writing: a /health/med POST (user tapping « Pris » right
+    // when the reminder lands — the most likely moment) may have updated
+    // `taken` while the push loop ran. Merge instead of clobbering.
+    const freshRaw = await env.KV.get(KEY_MED_STATE);
+    if (freshRaw) {
+      try {
+        const fresh = JSON.parse(freshRaw);
+        if (fresh.date === st.date) {
+          st.taken = Array.isArray(fresh.taken) ? fresh.taken : st.taken;
+          st.alerted = [...new Set([...(fresh.alerted || []), ...st.alerted])];
+        }
+      } catch {}
+    }
+    await env.KV.put(KEY_MED_STATE, JSON.stringify(st));
+  }
 }
 
 // Paris-local "today" key (YYYY-MM-DD) + minute-of-day.
@@ -776,7 +821,7 @@ async function checkDisruptions(env) {
 
   // Snapshot what was previously alerted BEFORE the send loop mutates the
   // set — comparing after meant a freshly-sent alert looked "unchanged",
-  // the KV write was skipped, and the same disruption re-pushed every 5 min.
+  // the KV write was skipped, and the same disruption re-pushed every cycle.
   const previous = Array.from(alerted).sort();
 
   // Send one push per new alert — max 3 per cycle, the most severe first.
@@ -804,7 +849,7 @@ async function checkDisruptions(env) {
   // Persist the active set so each disruption alerts exactly once. When a
   // line fetch failed, keep the previous IDs too — pruning them now would
   // re-alert the same disruption when the API recovers. Skip the write
-  // when truly nothing changed (this cron runs every 5 min).
+  // when truly nothing changed (this cron runs every 15 min).
   const persistSet = anyLineFailed ? new Set([...alerted, ...stillActive]) : stillActive;
   const persist = Array.from(persistSet).sort();
   if (JSON.stringify(persist) !== JSON.stringify(previous)) {
@@ -860,9 +905,8 @@ function isImpactful(d, withinHours = 6) {
 }
 
 function compactDisruptionText(d) {
-  const msg = (d.messages?.[0]?.text || '').toString().trim();
-  // Strip HTML
-  return msg.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim() || 'Trafic perturbé sur la ligne.';
+  const msg = (d.messages?.[0]?.text || '').toString();
+  return stripHtml(msg) || 'Trafic perturbé sur la ligne.';
 }
 
 // ---- Paris time helpers -------------------------------------------------
@@ -1267,15 +1311,16 @@ async function fetchHnTop() {
 // ---- XML utils --------------------------------------------------------
 
 function decodeXml(s) {
-  // &amp; decoded LAST or "&amp;lt;" double-decodes into a real "<".
-  return s
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(parseInt(n, 10)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&amp;/g, '&');
+  // Single pass — sequential replaces double-decode nested escapes like
+  // "&amp;lt;" (or numeric "&#38;lt;") into real markup characters.
+  const named = { lt: '<', gt: '>', quot: '"', apos: "'", amp: '&' };
+  return s.replace(/&(?:#(\d+)|#x([0-9a-f]+)|(lt|gt|quot|apos|amp));/gi, (_, dec, hex, name) => {
+    try {
+      if (dec) return String.fromCodePoint(parseInt(dec, 10));
+      if (hex) return String.fromCodePoint(parseInt(hex, 16));
+      return named[name.toLowerCase()];
+    } catch { return _; }
+  });
 }
 
 function cleanXmlText(s) {

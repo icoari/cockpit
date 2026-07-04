@@ -9,7 +9,10 @@ import { isConfigured as llmConfigured, complete } from './llm.js';
 import { nextJAndRer } from './trains.js';
 
 async function getTransport() {
-  const cached = cacheGet('home_transport', 60 * 1000);
+  // 45 s TTL (not 60) so the 60 s softRefresh tick never lands on a
+  // just-still-valid cache — that made the effective refresh ~2 min and
+  // showed departed trains as "à quai".
+  const cached = cacheGet('home_transport', 45 * 1000);
   if (cached) return cached;
   try {
     const t = await nextJAndRer();
@@ -50,10 +53,11 @@ function weatherLabelFromCode(c) {
 }
 
 async function fetchWeather() {
-  const cached = cacheGet('home_weather2', 30 * 60 * 1000);
-  if (cached) return cached;
   const loc = getSettings().location || {};
   if (!loc.lat || !loc.lon) return null;
+  const cacheKey = `home_weather_${loc.lat}_${loc.lon}`;
+  const cached = cacheGet(cacheKey, 30 * 60 * 1000);
+  if (cached) return cached;
   try {
     const r = await fetchWithTimeout(
       `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto`,
@@ -68,7 +72,7 @@ async function fetchWeather() {
       tMax: num(d.daily?.temperature_2m_max?.[0]),
       tMin: num(d.daily?.temperature_2m_min?.[0]),
     };
-    cacheSet('home_weather2', out);
+    cacheSet(cacheKey, out);
     return out;
   } catch { return null; }
 }
@@ -158,7 +162,9 @@ export class HomeWidget {
     // keep the page alive with a 60 s soft refresh.
     [2500, 6000, 12000].forEach(ms => setTimeout(() => this.softRefresh(), ms));
     setInterval(() => {
-      if (!document.hidden) this.softRefresh();
+      // Only poll while the Accueil tab is actually visible — no reason to
+      // hit the SIRI API every minute from another tab.
+      if (!document.hidden && (getSettings().activeTab || 'home') === 'home') this.softRefresh();
     }, 60_000);
   }
 
@@ -329,6 +335,9 @@ export class HomeWidget {
     const rerRetour = !!tr && tr.direction === 'retour';
     const row = (kind, dep, showLabel) => {
       const name = kind === 'j' ? 'J' : 'RER A';
+      // A departure more than a minute in the past is gone — showing it as
+      // "à quai" for up to 2 min (cache lag) was misleading.
+      if (dep && dep.expectedMs < Date.now() - 60_000) dep = null;
       if (!dep) {
         return `<div class="home-train"><span class="home-train__line line-${kind}">${name}</span><span class="home-train__time">—</span><span class="home-train__in">—</span></div>`;
       }
@@ -399,6 +408,9 @@ export class HomeWidget {
 
   async regenerateGreeting(force = false) {
     if (this.greetingBusy) return;
+    // Back off after a failure — without this, every 60 s softRefresh retried
+    // a broken LLM endpoint forever.
+    if (!force && this.greetingFailedAt && Date.now() - this.greetingFailedAt < 10 * 60 * 1000) return;
     if (!llmConfigured()) {
       const body = this.container.querySelector('[data-greeting-body]');
       if (body) body.innerHTML = `<p class="home-greeting__placeholder">Configure l'assistant dans Réglages pour activer l'ouverture du jour.</p>`;
@@ -427,8 +439,10 @@ export class HomeWidget {
       // Don't bake an obviously-empty context into the 4 h cache — the next
       // refresh will replace it as soon as we have real data.
       if (!thin) saveGreeting(this.greeting);
+      this.greetingFailedAt = 0;
       if (body) body.innerHTML = tinyMd(trimmed);
     } catch (e) {
+      this.greetingFailedAt = Date.now();
       if (body) body.innerHTML = `<p class="home-greeting__placeholder" style="color:var(--danger)">Échec : ${escapeHTML(e.message)}</p>`;
     } finally {
       this.greetingBusy = false;

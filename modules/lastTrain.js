@@ -1,8 +1,7 @@
 import { getSettings, cacheGet, cacheSet, cacheBust } from './state.js';
 import { ICONS } from './icons.js';
 import { escapeHTML, fetchWithTimeout, haptic } from './util.js';
-import { getPosition, distanceKm } from './geolocation.js';
-import { PARIS_RER_A } from './trains.js';
+import { nearestParisRerStation } from './trains.js';
 
 const CACHE_TTL = 6 * 60 * 60 * 1000; // schedule is mostly static
 
@@ -113,14 +112,7 @@ async function loadAll(apiKey) {
   const n152Dt = navitiaDt(n152StartTime());
 
   // RER A: from nearest Paris station to Conflans Fin d'Oise
-  const pos = await getPosition({ timeout: 4000 });
-  let rerStation = PARIS_RER_A[0];
-  if (pos) {
-    const sorted = PARIS_RER_A
-      .map(s => ({ ...s, d: distanceKm(pos, s) }))
-      .sort((a, b) => a.d - b.d);
-    if (sorted[0].d < 50) rerStation = sorted[0];
-  }
+  const { station: rerStation } = await nearestParisRerStation(4000);
 
   // Strategy: pull up to 50 future journeys for each line/destination starting
   // from the current time, then take the *last* one in the response. That's
@@ -158,8 +150,9 @@ async function loadAll(apiKey) {
   };
 
   // Don't cache a partial failure — better to retry on next visit than show
-  // "Service indisponible" for 6 h until the user manually refreshes.
-  if (summary.lastRer.summary) {
+  // "Service indisponible" for 6 h until the user manually refreshes. Require
+  // the RER AND at least one J answer (both Navitia legs fail intermittently).
+  if (summary.lastRer.summary && (summary.lastJFdo || summary.lastJSh)) {
     cacheSet('lastTrainData', dehydrate(summary));
   }
   return summary;

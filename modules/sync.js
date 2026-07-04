@@ -39,6 +39,17 @@ export function isSyncEnabled() {
   return !!(s?.authToken && s?.dataKeyHex);
 }
 
+// Shared accessors for the sync bearer token — this module owns the storage
+// key; everything else (llm, feed, notifications, calendar, voice, settings)
+// imports these instead of re-parsing localStorage.
+export function getSyncAuthToken() {
+  return readLocal()?.authToken || null;
+}
+export function getSyncAuthHeader() {
+  const tok = getSyncAuthToken();
+  return tok ? { 'Authorization': `Bearer ${tok}` } : null;
+}
+
 export function getSyncMeta() {
   const s = readLocal();
   if (!s) return null;
@@ -116,7 +127,7 @@ export function schedulePush(buildPayload) {
 
 async function runPush() {
   // Serialize pushes — two interleaved POSTs can persist lastPushedAt out
-  // of order and make pullIfNewer re-pull our own blob.
+  // of order and make the reconcile re-pull our own blob.
   if (pushInFlight) {
     await pushInFlight;
     if (!pushPending) return;
@@ -170,41 +181,49 @@ export async function pushNow(buildPayload) {
   return { updatedAt: local?.lastPushedAt || null };
 }
 
-// Pull the remote blob only if it's strictly newer than what we last
-// pushed from this device. Updates the local lastPushedAt/Hash so the
-// next check is idempotent. Used at startup + on tab focus.
-export async function pullIfNewer() {
+// Reconcile with the cloud, remote-newer-wins:
+//   1. Wait out any in-flight push (a debounced save racing us).
+//   2. GET the remote head. If it's strictly newer than what THIS device last
+//      pushed, apply it via `applyState` FIRST — pushing a stale local blob
+//      over a newer remote silently destroyed the other device's edits.
+//   3. Only mark the remote version as seen AFTER applyState succeeds, so a
+//      failed import is retried on the next reconcile instead of lost.
+//   4. If remote is not newer, push pending local changes (hash-gated no-op
+//      when nothing actually changed).
+// `updatedAt` values are server-generated on the Worker, so exact comparison
+// is safe — the old 1.5 s grace window made near-simultaneous pushes from
+// another device invisible forever.
+export async function startupReconcile(buildPayload, applyState) {
   if (!isSyncEnabled()) return null;
+  if (pushInFlight) { try { await pushInFlight; } catch {} }
   const local = readLocal();
   if (!local) return null;
-  const lastPushedAt = local.lastPushedAt || 0;
 
-  let resp;
+  let data;
   try {
-    resp = await fetch(`${WORKER_URL}/sync/data`, {
+    const resp = await fetch(`${WORKER_URL}/sync/data`, {
       headers: { 'Authorization': `Bearer ${local.authToken}` },
     });
+    if (!resp.ok) return null;
+    data = await resp.json();
   } catch { return null; }
-  if (!resp.ok) return null;
 
-  const data = await resp.json();
-  if (!data || !data.updatedAt) return null;
-  // Skip if remote isn't meaningfully newer (avoid round-trip races).
-  if (data.updatedAt <= lastPushedAt + 1500) return null;
+  const remoteNewer = data && data.updatedAt && data.updatedAt > (local.lastPushedAt || 0);
+  if (!remoteNewer) {
+    try { await pushNow(buildPayload); } catch {}
+    return null;
+  }
 
   const dataKey = await importDataKey(local.dataKeyHex);
   const plaintext = await decrypt(data.iv, data.ciphertext, dataKey);
   const hash = await sha256Hex(plaintext);
-  writeLocal({ ...local, lastPushedAt: data.updatedAt, lastPushedHash: hash });
-  return { state: JSON.parse(plaintext), updatedAt: data.updatedAt };
-}
-
-// Convenience: push any unsynced local change first, then pull if remote
-// turns out to be newer. The sequence avoids clobbering pending local edits.
-export async function startupReconcile(buildPayload) {
-  if (!isSyncEnabled()) return null;
-  try { await pushNow(buildPayload); } catch {}
-  return pullIfNewer();
+  const state = JSON.parse(plaintext);
+  if (applyState) {
+    const ok = applyState(state);
+    if (ok === false) return null;   // apply failed — retry next reconcile
+  }
+  writeLocal({ ...readLocal(), lastPushedAt: data.updatedAt, lastPushedHash: hash });
+  return { state, updatedAt: data.updatedAt, applied: !!applyState };
 }
 
 // Force-pull the remote blob (e.g. on startup or via a manual button).
@@ -227,13 +246,16 @@ export function disableSyncLocally() {
   clearLocal();
 }
 
-// Wipe everything on the Worker too (irreversible).
+// Wipe everything on the Worker too (irreversible). Only forget the local
+// credentials once the remote wipe actually succeeded — clearing them on a
+// failed DELETE would leave the blob in KV with no way to retry.
 export async function wipeRemote() {
   const local = readLocal();
   if (!local) return;
-  await fetch(`${WORKER_URL}/sync/wipe`, {
+  const resp = await fetch(`${WORKER_URL}/sync/wipe`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${local.authToken}` },
   });
+  if (!resp.ok) throw new Error(`Suppression distante échouée (HTTP ${resp.status}).`);
   clearLocal();
 }

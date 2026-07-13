@@ -1,4 +1,4 @@
-const CACHE = 'bob-v81';
+const CACHE = 'bob-v82';
 const ASSETS = [
   './',
   './index.html',
@@ -112,7 +112,7 @@ self.addEventListener('push', (event) => {
   const opts = {
     body: payload.body || '',
     tag: payload.tag || 'bob',
-    icon: './icons/icon-192.png',
+    icon: './icons/icon-192-v3.png',
     badge: './icons/icon.svg',
     data: { url: payload.url || '/' },
     renotify: payload.renotify === true,

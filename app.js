@@ -569,9 +569,9 @@ function refreshProjectStats() {
     setStat('memory', notes.length ? 'Notes' : 'Aucune note', notes.length ? `${notes.length}` : null);
   } catch { setStat('memory', 'Notes', null); }
 
-  // Road trip Canada — countdown to departure (4 → 26 août 2026)
+  // Road trip Canada — countdown to departure (11 → 26 août 2026)
   try {
-    const start = new Date(2026, 7, 4);
+    const start = new Date(2026, 7, 11);
     const end = new Date(2026, 7, 26);
     const today = new Date(); today.setHours(0, 0, 0, 0);
     if (today < start) setStat('roadtrip', 'Départ dans', `J-${Math.ceil((start - today) / 86400000)}`);

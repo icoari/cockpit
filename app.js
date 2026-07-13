@@ -569,13 +569,22 @@ function refreshProjectStats() {
     setStat('memory', notes.length ? 'Notes' : 'Aucune note', notes.length ? `${notes.length}` : null);
   } catch { setStat('memory', 'Notes', null); }
 
-  // Road trip Canada — countdown to departure (11 → 26 août 2026)
+  // Road trip Canada — countdown, then the day's stage during the trip
   try {
     const start = new Date(2026, 7, 11);
     const end = new Date(2026, 7, 26);
     const today = new Date(); today.setHours(0, 0, 0, 0);
+    const STAGE_BY_DAY = {
+      11: 'Montréal', 12: 'Montréal', 13: 'Montréal', 14: 'Québec', 15: 'Québec',
+      16: 'Charlevoix', 17: 'Tadoussac', 18: 'Tadoussac', 19: 'Fjord du Saguenay',
+      20: 'Trois-Rivières', 21: 'Ottawa', 22: 'Toronto', 23: 'Toronto', 24: 'Toronto',
+      25: 'Mille-Îles', 26: 'Retour Montréal',
+    };
     if (today < start) setStat('roadtrip', 'Départ dans', `J-${Math.ceil((start - today) / 86400000)}`);
-    else if (today <= end) setStat('roadtrip', 'En voyage', `Jour ${Math.floor((today - start) / 86400000) + 1}`);
+    else if (today <= end) {
+      const n = Math.floor((today - start) / 86400000) + 1;
+      setStat('roadtrip', `Jour ${n}/16`, STAGE_BY_DAY[today.getDate()] || 'En voyage');
+    }
     else setStat('roadtrip', 'Souvenirs · août 2026', null);
   } catch {}
 

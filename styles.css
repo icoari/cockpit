@@ -38,6 +38,8 @@
   --p-beiue-bg:   radial-gradient(140% 80% at 0% 0%, rgba(226, 109, 92, 0.16), transparent 60%);
   --p-memory:     #9D8CF0;
   --p-memory-bg:  radial-gradient(140% 80% at 0% 0%, rgba(157, 140, 240, 0.18), transparent 60%);
+  --p-roadtrip:    #5FA8C7;
+  --p-roadtrip-bg: radial-gradient(140% 80% at 0% 0%, rgba(95, 168, 199, 0.18), transparent 60%);
 
   /* Elevation */
   --elev-1: 0 1px 0 rgba(255, 255, 255, 0.04) inset,
@@ -109,6 +111,8 @@ body.theme-light {
   --p-beiue-bg:   radial-gradient(140% 80% at 0% 0%, rgba(177, 76, 62, 0.10), transparent 60%);
   --p-memory:     #6C5CC4;
   --p-memory-bg:  radial-gradient(140% 80% at 0% 0%, rgba(108, 92, 196, 0.09), transparent 60%);
+  --p-roadtrip:    #2E6E86;
+  --p-roadtrip-bg: radial-gradient(140% 80% at 0% 0%, rgba(46, 110, 134, 0.09), transparent 60%);
 
   --elev-1: 0 1px 0 rgba(255, 255, 255, 0.6) inset,
             0 1px 3px rgba(20, 20, 30, 0.06);
@@ -1597,6 +1601,7 @@ body.theme-light .projet-card::before {
 .projet-card--writer { --p-color: var(--p-writer); --p-tint: rgba(201, 168, 138, 0.12); --p-glow: rgba(201, 168, 138, 0.28); --p-bg: var(--p-writer-bg); }
 .projet-card--beiue  { --p-color: var(--p-beiue);  --p-tint: rgba(226, 109, 92, 0.12);  --p-glow: rgba(226, 109, 92, 0.28);  --p-bg: var(--p-beiue-bg); }
 .projet-card--memory { --p-color: var(--p-memory); --p-tint: rgba(157, 140, 240, 0.13); --p-glow: rgba(157, 140, 240, 0.30); --p-bg: var(--p-memory-bg); }
+.projet-card--roadtrip { --p-color: var(--p-roadtrip); --p-tint: rgba(95, 168, 199, 0.13); --p-glow: rgba(95, 168, 199, 0.30); --p-bg: var(--p-roadtrip-bg); }
 
 body.theme-light .projet-card--writer { --p-tint: rgba(140, 110, 74, 0.10); --p-glow: rgba(140, 110, 74, 0.24); }
 body.theme-light .projet-card--beiue  { --p-tint: rgba(177, 76, 62, 0.09);  --p-glow: rgba(177, 76, 62, 0.22); }

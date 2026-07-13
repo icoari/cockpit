@@ -369,6 +369,22 @@ function openProject(name, opts = {}) {
     return;
   }
 
+  if (name === 'roadtrip') {
+    inner.innerHTML = `
+      <div class="project-shell">
+        <div class="project-bar">
+          <button class="project-bar__back" type="button" data-close>← Bob</button>
+          <span class="project-bar__title">Road trip Canada</span>
+        </div>
+        <iframe class="project-frame" src="../roadtrip-canada/" loading="eager"></iframe>
+      </div>
+    `;
+    inner.querySelector('[data-close]').addEventListener('click', close);
+    overlay.hidden = false;
+    document.body.classList.add('project-open');
+    return;
+  }
+
   if (name === 'writer') {
     inner.innerHTML = `<div class="project-shell project-shell--writer" id="writerHost"></div>`;
     new WriterApp(document.getElementById('writerHost'), { onExit: close });
@@ -552,6 +568,16 @@ function refreshProjectStats() {
     const notes = raw ? (JSON.parse(raw).notes || []) : [];
     setStat('memory', notes.length ? 'Notes' : 'Aucune note', notes.length ? `${notes.length}` : null);
   } catch { setStat('memory', 'Notes', null); }
+
+  // Road trip Canada — countdown to departure (4 → 26 août 2026)
+  try {
+    const start = new Date(2026, 7, 4);
+    const end = new Date(2026, 7, 26);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    if (today < start) setStat('roadtrip', 'Départ dans', `J-${Math.ceil((start - today) / 86400000)}`);
+    else if (today <= end) setStat('roadtrip', 'En voyage', `Jour ${Math.floor((today - start) / 86400000) + 1}`);
+    else setStat('roadtrip', 'Souvenirs · août 2026', null);
+  } catch {}
 
   // BEIUE is a launcher — no live stats
 }

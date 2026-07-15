@@ -609,8 +609,8 @@ function refreshProjectStats() {
     const raw = localStorage.getItem('piano-progress-v1');
     const p = raw ? JSON.parse(raw) : null;
     const done = p ? Object.keys(p.lessons || {}).filter(k => p.lessons[k]).length : 0;
-    setStat('piano', done ? 'Leçons' : 'L'atelier du clavier', done ? `${done}/10` : null);
-  } catch { setStat('piano', 'L'atelier du clavier', null); }
+    setStat('piano', done ? 'Leçons' : 'L\'atelier du clavier', done ? `${done}/10` : null);
+  } catch { setStat('piano', 'L\'atelier du clavier', null); }
 
   // BEIUE is a launcher — no live stats
 }

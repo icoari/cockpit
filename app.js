@@ -369,6 +369,22 @@ function openProject(name, opts = {}) {
     return;
   }
 
+  if (name === 'piano') {
+    inner.innerHTML = `
+      <div class="project-shell">
+        <div class="project-bar">
+          <button class="project-bar__back" type="button" data-close>← Bob</button>
+          <span class="project-bar__title">Piano</span>
+        </div>
+        <iframe class="project-frame" src="../piano/" loading="eager"></iframe>
+      </div>
+    `;
+    inner.querySelector('[data-close]').addEventListener('click', close);
+    overlay.hidden = false;
+    document.body.classList.add('project-open');
+    return;
+  }
+
   if (name === 'roadtrip') {
     inner.innerHTML = `
       <div class="project-shell">
@@ -588,6 +604,14 @@ function refreshProjectStats() {
     else setStat('roadtrip', 'Souvenirs · août 2026', null);
   } catch {}
 
+  // Piano — lessons done
+  try {
+    const raw = localStorage.getItem('piano-progress-v1');
+    const p = raw ? JSON.parse(raw) : null;
+    const done = p ? Object.keys(p.lessons || {}).filter(k => p.lessons[k]).length : 0;
+    setStat('piano', done ? 'Leçons' : 'L'atelier du clavier', done ? `${done}/10` : null);
+  } catch { setStat('piano', 'L'atelier du clavier', null); }
+
   // BEIUE is a launcher — no live stats
 }
 
@@ -764,7 +788,7 @@ initSwipeNavigation();
 // Project cards on the Home page send a custom event — route it through openProject.
 document.addEventListener('bob-open-project', (e) => {
   const name = e.detail?.project;
-  if (name === 'health' || name === 'writer' || name === 'beiue' || name === 'memory') {
+  if (name === 'health' || name === 'writer' || name === 'beiue' || name === 'memory' || name === 'piano') {
     openProject(name, { voice: e.detail?.voice });
   }
 });

@@ -385,6 +385,22 @@ function openProject(name, opts = {}) {
     return;
   }
 
+  if (name === 'speakeasy') {
+    inner.innerHTML = `
+      <div class="project-shell">
+        <div class="project-bar">
+          <button class="project-bar__back" type="button" data-close>← Bob</button>
+          <span class="project-bar__title">Speakeasy</span>
+        </div>
+        <iframe class="project-frame" src="../speakeasy/" loading="eager"></iframe>
+      </div>
+    `;
+    inner.querySelector('[data-close]').addEventListener('click', close);
+    overlay.hidden = false;
+    document.body.classList.add('project-open');
+    return;
+  }
+
   if (name === 'roadtrip') {
     inner.innerHTML = `
       <div class="project-shell">
@@ -612,6 +628,13 @@ function refreshProjectStats() {
     setStat('piano', done ? 'Leçons' : 'L\'atelier du clavier', done ? `${done}/10` : null);
   } catch { setStat('piano', 'L\'atelier du clavier', null); }
 
+  // Speakeasy — série de jours (si l'app a tourné dans Bob)
+  try {
+    const sp = JSON.parse(localStorage.getItem('speakeasy-v1') || 'null');
+    const streak = sp?.meta?.streak || 0;
+    setStat('speakeasy', streak ? 'Série' : 'Le comptoir d\'anglais', streak ? streak + ' j' : null);
+  } catch { setStat('speakeasy', 'Le comptoir d\'anglais', null); }
+
   // BEIUE is a launcher — no live stats
 }
 
@@ -788,7 +811,7 @@ initSwipeNavigation();
 // Project cards on the Home page send a custom event — route it through openProject.
 document.addEventListener('bob-open-project', (e) => {
   const name = e.detail?.project;
-  if (name === 'health' || name === 'writer' || name === 'beiue' || name === 'memory' || name === 'piano') {
+  if (name === 'health' || name === 'writer' || name === 'beiue' || name === 'memory' || name === 'piano' || name === 'speakeasy') {
     openProject(name, { voice: e.detail?.voice });
   }
 });

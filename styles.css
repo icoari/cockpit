@@ -39,7 +39,9 @@
   --p-memory:     #9D8CF0;
   --p-memory-bg:  radial-gradient(140% 80% at 0% 0%, rgba(157, 140, 240, 0.18), transparent 60%);
   --p-piano:      #8A93CE;
+  --p-speakeasy:  #6FA08C;
   --p-piano-bg:   radial-gradient(140% 80% at 0% 0%, rgba(138, 147, 206, 0.18), transparent 60%);
+  --p-speakeasy-bg: radial-gradient(140% 80% at 0% 0%, rgba(111, 160, 140, 0.18), transparent 60%);
   --p-roadtrip:    #5FA8C7;
   --p-roadtrip-bg: radial-gradient(140% 80% at 0% 0%, rgba(95, 168, 199, 0.18), transparent 60%);
 
@@ -114,7 +116,9 @@ body.theme-light {
   --p-memory:     #6C5CC4;
   --p-memory-bg:  radial-gradient(140% 80% at 0% 0%, rgba(108, 92, 196, 0.09), transparent 60%);
   --p-piano:      #5A64A8;
+  --p-speakeasy:  #35594B;
   --p-piano-bg:   radial-gradient(140% 80% at 0% 0%, rgba(90, 100, 168, 0.09), transparent 60%);
+  --p-speakeasy-bg: radial-gradient(140% 80% at 0% 0%, rgba(53, 89, 75, 0.09), transparent 60%);
   --p-roadtrip:    #2E6E86;
   --p-roadtrip-bg: radial-gradient(140% 80% at 0% 0%, rgba(46, 110, 134, 0.09), transparent 60%);
 
@@ -1606,6 +1610,7 @@ body.theme-light .projet-card::before {
 .projet-card--beiue  { --p-color: var(--p-beiue);  --p-tint: rgba(226, 109, 92, 0.12);  --p-glow: rgba(226, 109, 92, 0.28);  --p-bg: var(--p-beiue-bg); }
 .projet-card--memory { --p-color: var(--p-memory); --p-tint: rgba(157, 140, 240, 0.13); --p-glow: rgba(157, 140, 240, 0.30); --p-bg: var(--p-memory-bg); }
 .projet-card--piano { --p-color: var(--p-piano); --p-tint: rgba(138, 147, 206, 0.13); --p-glow: rgba(138, 147, 206, 0.30); --p-bg: var(--p-piano-bg); }
+.projet-card--speakeasy { --p-color: var(--p-speakeasy); --p-tint: rgba(111, 160, 140, 0.13); --p-glow: rgba(111, 160, 140, 0.30); --p-bg: var(--p-speakeasy-bg); }
 .projet-card--roadtrip { --p-color: var(--p-roadtrip); --p-tint: rgba(95, 168, 199, 0.13); --p-glow: rgba(95, 168, 199, 0.30); --p-bg: var(--p-roadtrip-bg); }
 
 body.theme-light .projet-card--writer { --p-tint: rgba(140, 110, 74, 0.10); --p-glow: rgba(140, 110, 74, 0.24); }

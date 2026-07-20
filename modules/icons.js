@@ -34,6 +34,7 @@ export const ICONS = {
   trees:         svg('<path d="M10 10v.2A3 3 0 0 1 8.9 16H5a3 3 0 0 1-1-5.8V10a3 3 0 0 1 6 0Z"/><path d="M7 16v6"/><path d="M13 19v3"/><path d="M12 19h8.3a1 1 0 0 0 .7-1.7L18 14h.3a1 1 0 0 0 .7-1.7L16 9h.2a1 1 0 0 0 .8-1.7L13 3l-1.4 1.5"/>'),
   mic:           svg('<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/>'),
   piano:         svg('<rect x="3" y="6" width="18" height="12" rx="2"/><line x1="9" y1="6" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="18"/><rect x="7.6" y="6" width="2.8" height="6.5" fill="currentColor" stroke="none"/><rect x="13.6" y="6" width="2.8" height="6.5" fill="currentColor" stroke="none"/>'),
+  speakeasy:     svg('<path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H10l-4 4v-4H6a2 2 0 0 1-2-2z"/><circle cx="9" cy="10" r="0.6" fill="currentColor"/><circle cx="12" cy="10" r="0.6" fill="currentColor"/><circle cx="15" cy="10" r="0.6" fill="currentColor"/>'),
   compass:       svg('<circle cx="12" cy="12" r="9"/><polygon points="15.5 8.5 13.5 13.5 8.5 15.5 10.5 10.5 15.5 8.5"/>'),
   brain:         svg('<path d="M12 5a3 3 0 0 0-5.5-1.6A2.5 2.5 0 0 0 4 6.5 2.5 2.5 0 0 0 3 11a2.5 2.5 0 0 0 1 4.5 2.5 2.5 0 0 0 2.5 2.6A3 3 0 0 0 12 19z"/><path d="M12 5a3 3 0 0 1 5.5-1.6A2.5 2.5 0 0 1 20 6.5 2.5 2.5 0 0 1 21 11a2.5 2.5 0 0 1-1 4.5 2.5 2.5 0 0 1-2.5 2.6A3 3 0 0 1 12 19z"/><line x1="12" y1="5" x2="12" y2="19"/>'),
 };

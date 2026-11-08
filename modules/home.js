@@ -142,6 +142,16 @@ function ago(dateISO) {
   return `il y a ${n} jours`;
 }
 
+// Kicker over the opener: when it is being read, not a static label.
+function momentLabel(d = new Date()) {
+  const h = d.getHours();
+  if (h < 5) return 'Cette nuit';
+  if (h < 12) return 'Ce matin';
+  if (h < 14) return 'Ce midi';
+  if (h < 18) return 'Cet après-midi';
+  return 'Ce soir';
+}
+
 function tinyMd(s) {
   return escapeHTML(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 }
@@ -172,6 +182,8 @@ export class HomeWidget {
   // the greeting (which has its own TTL logic).
   async softRefresh() {
     this.context = await this.gatherContext();
+    const moment = this.container.querySelector('[data-moment]');
+    if (moment) moment.textContent = momentLabel();
     this.renderTiles();
     this.renderPrios();
     this.renderProjects();
@@ -181,7 +193,7 @@ export class HomeWidget {
   render() {
     this.container.innerHTML = `
       <section class="home-greeting" data-greeting>
-        <span class="home-greeting__eyebrow">Aujourd'hui</span>
+        <span class="home-greeting__eyebrow" data-moment>${momentLabel()}</span>
         <div class="home-greeting__body" data-greeting-body>
           ${this.greeting?.text ? tinyMd(this.greeting.text) : '<p class="home-greeting__placeholder">Ouverture en préparation…</p>'}
         </div>
@@ -191,11 +203,11 @@ export class HomeWidget {
       <section class="home-section" data-section="quick">
         <div class="home-section__head"><span class="home-section__label">Accès rapide</span></div>
         <div class="home-quick">
-          <button class="home-quick__btn home-quick__btn--health" type="button" data-home-voice>
-            <span class="home-quick__icon">${ICONS.mic}</span><span class="home-quick__label">Dicter santé</span>
+          <button class="home-quick__btn home-quick__btn--health" type="button" data-home-voice aria-label="Dicter une note santé">
+            <span class="home-quick__icon">${ICONS.mic}</span><span class="home-quick__label">Santé</span>
           </button>
-          <button class="home-quick__btn home-quick__btn--event" type="button" data-home-event>
-            <span class="home-quick__icon">${ICONS.mic}</span><span class="home-quick__label">Dicter event</span>
+          <button class="home-quick__btn home-quick__btn--event" type="button" data-home-event aria-label="Dicter un événement">
+            <span class="home-quick__icon">${ICONS.mic}</span><span class="home-quick__label">Agenda</span>
           </button>
           <button class="home-quick__btn home-quick__btn--memory" type="button" data-home-memory>
             <span class="home-quick__icon">${ICONS.brain}</span><span class="home-quick__label">Mémoire</span>
@@ -206,13 +218,13 @@ export class HomeWidget {
       <div class="home-tiles" data-tiles></div>
 
       <section class="home-section" data-section="prios">
-        <div class="home-section__head"><span class="home-section__label">À lire prio</span></div>
-        <div class="home-section__body" data-prios>—</div>
+        <div class="home-section__head"><span class="home-section__label">À lire</span></div>
+        <div class="home-section__body" data-prios></div>
       </section>
 
       <section class="home-section" data-section="projects">
         <div class="home-section__head"><span class="home-section__label">Projets</span></div>
-        <div class="home-projects" data-projects>—</div>
+        <div class="home-projects" data-projects></div>
       </section>
     `;
     this.container.addEventListener('click', (e) => {
@@ -329,7 +341,7 @@ export class HomeWidget {
   // Wide tile: next Transilien J + next RER A, for the direction that matches
   // the current location (toward Paris from home, toward Conflans from Paris).
   transportTile(tr) {
-    const dirLabel = tr ? (tr.direction === 'retour' ? '→ Conflans' : '→ Paris') : '';
+    const dirLabel = tr ? (tr.direction === 'retour' ? 'vers Conflans' : 'vers Paris') : '';
     // Small destination label only for the RER A in the Paris→Conflans sense
     // (its western branches differ — useful to see which one).
     const rerRetour = !!tr && tr.direction === 'retour';
@@ -339,7 +351,7 @@ export class HomeWidget {
       // "à quai" for up to 2 min (cache lag) was misleading.
       if (dep && dep.expectedMs < Date.now() - 60_000) dep = null;
       if (!dep) {
-        return `<div class="home-train"><span class="home-train__line line-${kind}">${name}</span><span class="home-train__time">—</span><span class="home-train__in">—</span></div>`;
+        return `<div class="home-train"><span class="home-train__line line-${kind}">${name}</span><span class="home-train__in">aucun départ</span></div>`;
       }
       const mins = Math.round((dep.expectedMs - Date.now()) / 60000);
       const time = new Date(dep.expectedMs).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -355,10 +367,10 @@ export class HomeWidget {
     };
     const body = tr
       ? `<div class="home-trains">${row('j', tr.j, false)}${row('rer', tr.rer, rerRetour)}</div>`
-      : `<div class="home-train__empty">Prochains départs · ouvre Trains</div>`;
+      : `<div class="home-train__empty">Horaires indisponibles, ouvre Trains.</div>`;
     return `
       <button class="home-tile home-tile--wide" type="button" data-goto="trains">
-        <span class="home-tile__label">Prochains départs ${escapeHTML(dirLabel)}</span>
+        <span class="home-tile__label">Départs ${escapeHTML(dirLabel)}</span>
         ${body}
       </button>`;
   }
@@ -443,7 +455,7 @@ export class HomeWidget {
       if (body) body.innerHTML = tinyMd(trimmed);
     } catch (e) {
       this.greetingFailedAt = Date.now();
-      if (body) body.innerHTML = `<p class="home-greeting__placeholder" style="color:var(--danger)">Échec : ${escapeHTML(e.message)}</p>`;
+      if (body) body.innerHTML = `<p class="home-greeting__placeholder home-greeting__placeholder--error">Échec : ${escapeHTML(e.message)}</p>`;
     } finally {
       this.greetingBusy = false;
       if (refreshBtn) refreshBtn.classList.remove('home-greeting__refresh--busy');

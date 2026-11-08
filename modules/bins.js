@@ -49,9 +49,9 @@ function nextQuarterlyNthThursday(n, count = 6) {
 }
 
 const PATTERNS = {
-  'monthly-2nd-tuesday':          { label: 'Immeuble — 2ᵉ mardi du mois',           next: (n) => nextMonthlyNthWeekday(2, 2, n) },
-  'monthly-1st-thursday-quarter': { label: 'Maison orange/violet — 1er jeudi (1/4/7/10)', next: (n) => nextQuarterlyNthThursday(1, n) },
-  'monthly-3rd-thursday-quarter': { label: 'Maison bleu/vert — 3ᵉ jeudi (1/4/7/10)',       next: (n) => nextQuarterlyNthThursday(3, n) },
+  'monthly-2nd-tuesday':          { label: 'Immeuble, 2ᵉ mardi du mois',           next: (n) => nextMonthlyNthWeekday(2, 2, n) },
+  'monthly-1st-thursday-quarter': { label: 'Maison orange/violet, 1er jeudi (1/4/7/10)', next: (n) => nextQuarterlyNthThursday(1, n) },
+  'monthly-3rd-thursday-quarter': { label: 'Maison bleu/vert, 3ᵉ jeudi (1/4/7/10)',       next: (n) => nextQuarterlyNthThursday(3, n) },
   'weekly-monday':    { label: 'Tous les lundis',    next: (n) => nextWeeklies(1, n) },
   'weekly-tuesday':   { label: 'Tous les mardis',    next: (n) => nextWeeklies(2, n) },
   'weekly-wednesday': { label: 'Tous les mercredis', next: (n) => nextWeeklies(3, n) },
@@ -124,7 +124,7 @@ export class BinsWidget {
         return `
           <div class="collecte-col collecte-col--disabled">
             <div class="collecte-col__label">${escapeHTML(t.short)}</div>
-            <div class="collecte-col__num">—</div>
+            <div class="collecte-col__num">–</div>
             <div class="collecte-col__date">non configuré</div>
           </div>
         `;

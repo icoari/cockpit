@@ -62,7 +62,7 @@ const SYSTEM_RECAP = `Tu es l'assistant de notes de Nicolas. À partir de ses no
 
 export async function recap(question) {
   const notes = loadNotes().map(n => ({ category: n.category, text: n.text }));
-  if (!notes.length) return 'Aucune note pour l\'instant — capture la première.';
+  if (!notes.length) return 'Aucune note pour l\'instant, capture la première.';
   const user = `Demande : ${question || 'Fais-moi un récap clair de mes notes.'}\n\nNotes :\n${JSON.stringify(notes)}`;
   return (await complete(
     [{ role: 'system', content: SYSTEM_RECAP }, { role: 'user', content: user }],

@@ -92,7 +92,7 @@ export async function setupSync(passphrase) {
 export async function unlockSync(passphrase) {
   const remote = await fetchSalt();
   if (!remote.setup) {
-    throw new Error('Aucune sauvegarde n\'existe — active la sync d\'abord sur un appareil.');
+    throw new Error('Aucune sauvegarde n\'existe : active la sync d\'abord sur un appareil.');
   }
   const { authToken, dataKeyHex, dataKey } = await deriveKeys(passphrase, remote.salt);
 

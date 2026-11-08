@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#0A0A0F" media="(prefers-color-scheme: dark)">
-  <meta name="theme-color" content="#F4F2EE" media="(prefers-color-scheme: light)">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https:; frame-src 'self' https://accounts.google.com; base-uri 'self'; form-action 'self'; object-src 'none';">
+  <meta name="theme-color" content="#15140F" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#F4EFE6" media="(prefers-color-scheme: light)">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com https://apis.google.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https: blob:; connect-src 'self' https:; frame-src 'self' https://accounts.google.com; base-uri 'self'; form-action 'self'; object-src 'none';">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Bob">
@@ -30,9 +30,8 @@
   <link rel="apple-touch-startup-image" href="icons/splash-1290x2796.png"
     media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preload" href="fonts/fraunces.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -95,9 +94,9 @@
           <span class="projet-card__icon" data-icon="activity"></span>
           <div class="projet-card__body">
             <div class="projet-card__title">Suivi santé</div>
-            <div class="projet-card__desc">Note, cachet, crise, commentaires — 3 créneaux par jour.</div>
+            <div class="projet-card__desc">Note, cachet, crise et commentaires, trois fois par jour.</div>
           </div>
-          <div class="projet-card__stat" data-project-stat="health">—</div>
+          <div class="projet-card__stat" data-project-stat="health"></div>
           <span class="projet-card__arrow" data-icon="arrowRight"></span>
         </button>
         <button class="projet-card projet-card--writer" data-project="writer" type="button">
@@ -106,7 +105,7 @@
             <div class="projet-card__title">Écrire</div>
             <div class="projet-card__desc">Chapitres long-format, copilote intégré.</div>
           </div>
-          <div class="projet-card__stat" data-project-stat="writer">—</div>
+          <div class="projet-card__stat" data-project-stat="writer"></div>
           <span class="projet-card__arrow" data-icon="arrowRight"></span>
         </button>
         <button class="projet-card projet-card--memory" data-project="memory" type="button">
@@ -122,7 +121,7 @@
           <span class="projet-card__icon" data-icon="compass"></span>
           <div class="projet-card__body">
             <div class="projet-card__title">Road trip Canada</div>
-            <div class="projet-card__desc">Le carnet du voyage — itinéraire, étapes, logements.</div>
+            <div class="projet-card__desc">Le carnet du voyage : itinéraire, étapes, logements.</div>
           </div>
           <div class="projet-card__stat" data-project-stat="roadtrip">Août 2026</div>
           <span class="projet-card__arrow" data-icon="arrowRight"></span>
@@ -131,7 +130,7 @@
           <span class="projet-card__icon" data-icon="piano"></span>
           <div class="projet-card__body">
             <div class="projet-card__title">Piano</div>
-            <div class="projet-card__desc">L'atelier du clavier — leçons, mélodies, accords, oreille.</div>
+            <div class="projet-card__desc">Transcrire un morceau, puis le rejouer sur le vrai piano.</div>
           </div>
           <div class="projet-card__stat" data-project-stat="piano">Nouveau</div>
           <span class="projet-card__arrow" data-icon="arrowRight"></span>
@@ -140,7 +139,7 @@
           <span class="projet-card__icon" data-icon="speakeasy"></span>
           <div class="projet-card__body">
             <div class="projet-card__title">Speakeasy</div>
-            <div class="projet-card__desc">L'anglais en discutant — coach, programmes, corrections.</div>
+            <div class="projet-card__desc">L'anglais en discutant : coach, programmes, corrections.</div>
           </div>
           <div class="projet-card__stat" data-project-stat="speakeasy">Nouveau</div>
           <span class="projet-card__arrow" data-icon="arrowRight"></span>
@@ -149,7 +148,7 @@
           <span class="projet-card__icon" data-icon="scales"></span>
           <div class="projet-card__body">
             <div class="projet-card__title">BEIUE</div>
-            <div class="projet-card__desc">Truth engine — la vérité sur quelqu'un.</div>
+            <div class="projet-card__desc">Truth engine, la vérité sur quelqu'un.</div>
           </div>
           <div class="projet-card__stat" data-project-stat="beiue">Lance avec un nom</div>
           <span class="projet-card__arrow" data-icon="arrowRight"></span>

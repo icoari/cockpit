@@ -92,7 +92,7 @@ export class ProWidget {
     this.container.innerHTML = `
       <div class="pro2-context" data-context hidden></div>
       <div class="pro2-toolbar">
-        <span class="pro2-toolbar__meta" data-meta>—</span>
+        <span class="pro2-toolbar__meta" data-meta></span>
         <button class="pro2-refresh" data-action="refresh" type="button" aria-label="Rafraîchir l'éditorial">${ICONS.refresh}</button>
       </div>
       <div class="pro2-body" data-body></div>

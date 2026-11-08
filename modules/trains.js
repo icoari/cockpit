@@ -137,7 +137,7 @@ export function isConflansBoundFromParisRER(dep) {
 // ---------- Rendering helpers ----------
 function statusBadge(d) {
   if (d.cancelled) return { cls: 'train-row__status--cancel', text: 'Supprimé' };
-  if (!d.aimed || !d.expected) return { cls: '', text: '—' };
+  if (!d.aimed || !d.expected) return { cls: '', text: '–' };
   const delaySec = (d.expected - d.aimed) / 1000;
   if (delaySec > 60) {
     const min = Math.round(delaySec / 60);
@@ -163,7 +163,7 @@ function renderRow(d, { highlightLast = false } = {}) {
   return `
     <div class="${cls.join(' ')}">
       <div class="train-row__when ${whenExtraCls}">${escapeHTML(minLabel)}<small>${escapeHTML(aimedTime)}${d.platform ? ' · voie ' + escapeHTML(d.platform) : ''}</small></div>
-      <div class="train-row__dest">${escapeHTML(d.destination || '—')}</div>
+      <div class="train-row__dest">${escapeHTML(d.destination || 'Destination inconnue')}</div>
       <div class="train-row__status ${status.cls}">${escapeHTML(status.text)}</div>
     </div>
   `;
@@ -188,7 +188,7 @@ function renderSubtabs(active) {
 }
 
 function renderShell(direction, activeSubtab, body, subtitle = '') {
-  const title = direction === 'aller' ? 'Trains — vers Paris' : 'Trains — retour';
+  const title = direction === 'aller' ? 'Vers Paris' : 'Retour à Conflans';
   return `
     <div class="card__head">
       <div class="card__head-main">

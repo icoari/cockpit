@@ -127,7 +127,7 @@ export class WriterApp {
     this.container.innerHTML = `
       <div class="writer-shell">
         <div class="writer-bar">
-          <button class="writer-bar__back" data-action="exit" type="button">← Bob</button>
+          <button class="writer-bar__back" data-action="exit" type="button">${ICONS.chevronLeft}<span>Bob</span></button>
           <span class="writer-bar__title">Écrire</span>
           <button class="writer-bar__action" data-action="new" type="button" aria-label="Nouveau chapitre">${ICONS.plus}</button>
         </div>
@@ -145,7 +145,7 @@ export class WriterApp {
     this.container.innerHTML = `
       <div class="writer-shell">
         <div class="writer-bar">
-          <button class="writer-bar__back" data-action="back" type="button">← Chapitres</button>
+          <button class="writer-bar__back" data-action="back" type="button">${ICONS.chevronLeft}<span>Chapitres</span></button>
           <span class="writer-bar__title writer-bar__title--word" data-word-count>${countWords(c.content)} mots</span>
         </div>
         <div class="writer-edit">
@@ -280,7 +280,7 @@ export class WriterApp {
     // Mirror of toggleDictation's copilotBusy guard: a stream started while
     // recording would snapshot the text, then overwrite the dictation insert.
     if (this.recorder) {
-      statusEl.textContent = 'Dictée en cours — termine-la d\'abord.';
+      statusEl.textContent = 'Dictée en cours, termine-la d\'abord.';
       return;
     }
 

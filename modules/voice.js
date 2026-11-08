@@ -129,7 +129,7 @@ function releaseMic() {
 
 async function transcribeBlob(blob) {
   const token = getSyncAuthToken();
-  if (!token) throw new Error('Active la sauvegarde cloud — la dictée transite par ton Worker.');
+  if (!token) throw new Error('Active la sauvegarde cloud : la dictée transite par ton Worker.');
   const audio = await blobToBase64(blob);
 
   const resp = await fetch(`${WORKER_URL}/transcribe`, {
@@ -139,7 +139,7 @@ async function transcribeBlob(blob) {
   });
   if (!resp.ok) {
     const txt = await resp.text().catch(() => '');
-    throw new Error(`Transcription HTTP ${resp.status} — ${txt.slice(0, 200)}`);
+    throw new Error(`Transcription HTTP ${resp.status} : ${txt.slice(0, 200)}`);
   }
   const data = await resp.json();
   return (data.text || '').trim();

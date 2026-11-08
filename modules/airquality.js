@@ -7,7 +7,7 @@ const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 async function fetchAir() {
   const { lat, lon } = getSettings().location;
   if (lat == null || lon == null) {
-    throw new Error('Localisation non configurée — renseigne lat/lon dans les Réglages.');
+    throw new Error('Localisation non configurée, renseigne lat/lon dans les Réglages.');
   }
   const cacheKey = `air_${lat}_${lon}`;   // coords in key — see weatherCard
   const cached = cacheGet(cacheKey, CACHE_TTL);

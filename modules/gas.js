@@ -114,7 +114,7 @@ export class GasWidget {
     let geoloc = !!pos;
     if (!pos) pos = { lat: settings.location.lat, lon: settings.location.lon };
     if (pos.lat == null || pos.lon == null) {
-      this.setBody('<div class="card__empty">Localisation indisponible — autorise la géolocalisation ou renseigne lat/lon dans les <a href="#" data-open-settings>Réglages</a>.</div>');
+      this.setBody('<div class="card__empty">Localisation indisponible : autorise la géolocalisation ou renseigne lat/lon dans les <a href="#" data-open-settings>Réglages</a>.</div>');
       this.setSubtitle('non configuré');
       return;
     }

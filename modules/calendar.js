@@ -56,7 +56,7 @@ const SIGN_IN_NEEDED = () => Object.assign(new Error('SIGN_IN_NEEDED'), { silent
 function friendlyError(e) {
   const msg = e?.message || String(e);
   return msg === 'SIGN_IN_NEEDED'
-    ? 'Agenda Google déconnecté — rouvre la carte Agenda et tape « Se connecter à Google ».'
+    ? 'Agenda Google déconnecté, rouvre la carte Agenda et tape « Se connecter à Google ».'
     : msg;
 }
 
@@ -85,7 +85,7 @@ async function interactiveConnect() {
   });
 
   const sync = getSyncAuthToken();
-  if (!sync) throw new Error('Active la sauvegarde cloud — l\'agenda passe par ton Worker.');
+  if (!sync) throw new Error('Active la sauvegarde cloud : l\'agenda passe par ton Worker.');
   const r = await fetch(`${WORKER_URL}/google/exchange`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sync}` },
@@ -276,7 +276,7 @@ const GOOGLE_COLORS = {
   '1':'#7986CB','2':'#33B679','3':'#8E24AA','4':'#E67C73','5':'#F6BF26',
   '6':'#F4511E','7':'#039BE5','8':'#616161','9':'#3F51B5','10':'#0B8043','11':'#D50000',
 };
-const DEFAULT_EVENT_COLOR = '#7FD1B9';
+const DEFAULT_EVENT_COLOR = '#4F8A8B';
 const eventColor = (ev) => GOOGLE_COLORS[ev.colorId] || DEFAULT_EVENT_COLOR;
 
 // ---------- Voice dictation → events ----------
@@ -345,7 +345,7 @@ export function runEventDictation(host, { onClose = () => {}, onCreated = () => 
   async function start() {
     stage = 'recording'; draw();
     try { rec = new VoiceRecorder(); await rec.start(); }
-    catch (e) { stage = 'idle'; msg = 'Micro refusé — tape pour réessayer.'; draw(); }
+    catch (e) { stage = 'idle'; msg = 'Micro refusé, tape pour réessayer.'; draw(); }
   }
   async function stop() {
     stage = 'working'; msg = 'Transcription…'; draw();
@@ -821,7 +821,7 @@ export class CalendarWidget {
     const draft = this.createDraft || {};
     const defaultDate = draft.start || this.selectedDay;
     const colorChoices = [
-      { id: '', color: '#7FD1B9', label: 'Par défaut' },
+      { id: '', color: '#4F8A8B', label: 'Par défaut' },
       { id: '1',  color: GOOGLE_COLORS['1'],  label: 'Lavande' },
       { id: '2',  color: GOOGLE_COLORS['2'],  label: 'Sauge' },
       { id: '10', color: GOOGLE_COLORS['10'], label: 'Basilic' },

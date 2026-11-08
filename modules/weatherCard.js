@@ -7,7 +7,7 @@ const CACHE_TTL = 30 * 60 * 1000;
 async function fetchForecast() {
   const { lat, lon } = getSettings().location;
   if (lat == null || lon == null) {
-    throw new Error('Localisation non configurée — renseigne lat/lon dans les Réglages.');
+    throw new Error('Localisation non configurée, renseigne lat/lon dans les Réglages.');
   }
   // Coords in the cache key — editing the location in Réglages must not
   // serve the old place's forecast for up to 30 min.
@@ -73,7 +73,7 @@ function renderHourlyChart(hourly) {
     const h = (p.prob / 100) * (H - 4);
     const y = H - h;
     if (p.prob < 5) return '';
-    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="rgba(127,209,185,0.18)" rx="1" />`;
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" class="weather-sparkline__bar" rx="1" />`;
   }).join('');
   // X axis ticks
   const ticks = points.filter((_, i) => i === 0 || i === points.length - 1 || i % 4 === 0);
@@ -81,14 +81,14 @@ function renderHourlyChart(hourly) {
     const i = points.indexOf(p);
     const x = i * dx;
     const label = p.hour.toLocaleTimeString('fr-FR', { hour: '2-digit' }).replace(':00', 'h');
-    return `<text x="${x.toFixed(1)}" y="${H - 0.5}" font-size="3.4" fill="rgba(255,255,255,0.35)" text-anchor="middle">${label}</text>`;
+    return `<span style="left:${(x / W * 100).toFixed(1)}%">${label}</span>`;
   }).join('');
   return `
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="weather-sparkline">
       ${bars}
-      <path d="${path}" fill="none" stroke="#7FD1B9" stroke-width="0.8" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>
-      ${tickEls}
+      <path d="${path}" class="weather-sparkline__line" fill="none" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
+    <div class="weather-sparkline__ticks">${tickEls}</div>
   `;
 }
 
@@ -123,7 +123,7 @@ export class WeatherCard {
     this.container.innerHTML = `
       <div class="card__head">
         <div class="card__head-main">
-          <span class="card__title">Météo — ${escapeHTML(getSettings().location.name)}</span>
+          <span class="card__title">Météo · ${escapeHTML(getSettings().location.name)}</span>
           <span class="card__subtitle"></span>
         </div>
         <div class="card__actions">
@@ -179,7 +179,7 @@ export class WeatherCard {
 
       const uvLabel = uvMax >= 11 ? 'extrême' : uvMax >= 8 ? 'très élevé' : uvMax >= 6 ? 'élevé' : uvMax >= 3 ? 'modéré' : 'faible';
       const uvCls   = uvMax >= 8 ? 'uv--high' : uvMax >= 6 ? 'uv--med-high' : uvMax >= 3 ? 'uv--med' : 'uv--low';
-      const fmtTime = (d) => d ? d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—';
+      const fmtTime = (d) => d ? d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '–';
 
       body.innerHTML = `
         <div class="weather-current">

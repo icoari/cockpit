@@ -27,6 +27,16 @@ function getConfig() {
   return c;
 }
 
+const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-5';
+
+// Claude generations from Opus 4.7 / Sonnet 5 on reject sampling params
+// (400 on temperature). Sonnet 5, Opus 4.7/4.8 and Opus 5 also think by
+// default unless told not to, which can spend a short max_tokens on thinking
+// and return no text. Fable and Opus 5.5 cannot turn thinking off at all.
+const NO_SAMPLING = /claude-(sonnet-5|opus-4-[78]|opus-5|fable|mythos)/;
+const CAN_DISABLE_THINKING = /claude-(sonnet-5|opus-4-[78]|opus-5(?!-5))/;
+const ALWAYS_THINKS = /claude-(fable|mythos|opus-5-5)/;
+
 // Build the body the upstream expects.
 function buildBody(c, messages, opts) {
   const format = c.format || 'openai';
@@ -35,12 +45,21 @@ function buildBody(c, messages, opts) {
     // Extract any system messages — Anthropic uses a top-level field.
     const systemBits = messages.filter(m => m.role === 'system').map(m => m.content);
     const userMsgs = messages.filter(m => m.role !== 'system');
+    // Azure Foundry deployments can carry any name: match on the model id
+    // inside it, and fall back to the legacy behaviour when nothing matches.
+    const model = c.model || DEFAULT_CLAUDE_MODEL;
+    const id = model.toLowerCase();
     const body = {
-      model: c.model || 'claude-sonnet-4-5',
+      model,
       max_tokens: opts.maxTokens ?? 2048,
-      temperature: opts.temperature ?? 0.3,
       messages: userMsgs,
     };
+    if (!NO_SAMPLING.test(id)) body.temperature = opts.temperature ?? 0.3;
+    if (CAN_DISABLE_THINKING.test(id)) body.thinking = { type: 'disabled' };
+    if (ALWAYS_THINKS.test(id)) {
+      body.output_config = { effort: 'low' };
+      body.max_tokens = Math.max(body.max_tokens, 4096);
+    }
     if (systemBits.length) body.system = systemBits.join('\n\n');
     if (opts.stream) body.stream = true;
     return body;
@@ -61,7 +80,7 @@ function buildBody(c, messages, opts) {
 async function callProxy(messages, opts) {
   const c = getConfig();
   const syncAuth = getSyncAuthToken();
-  if (!syncAuth) throw new Error('Active d\'abord la sauvegarde cloud — l\'assistant transite par ton Worker.');
+  if (!syncAuth) throw new Error('Active d\'abord la sauvegarde cloud : l\'assistant transite par ton Worker.');
 
   const headers = {
     'Content-Type': 'application/json',
@@ -81,7 +100,7 @@ async function callProxy(messages, opts) {
 
   if (!resp.ok) {
     const txt = await resp.text().catch(() => '');
-    throw new Error(`HTTP ${resp.status} — ${txt.slice(0, 400)}`);
+    throw new Error(`HTTP ${resp.status} : ${txt.slice(0, 400)}`);
   }
   return resp;
 }

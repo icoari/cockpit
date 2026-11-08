@@ -105,7 +105,7 @@ export async function sendTestPush() {
   });
   if (!resp.ok) {
     const txt = await resp.text().catch(() => '');
-    throw new Error(`HTTP ${resp.status} — ${txt.slice(0, 200)}`);
+    throw new Error(`HTTP ${resp.status} : ${txt.slice(0, 200)}`);
   }
 }
 

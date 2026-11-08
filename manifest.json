@@ -1,12 +1,12 @@
 {
   "name": "Bob",
   "short_name": "Bob",
-  "description": "Dashboard quotidien personnel : trains, météo, agenda, veille tech & IA, et plus.",
+  "description": "Le journal du matin de Nicolas : trains, météo, agenda, veille tech et IA, projets.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#07070C",
-  "theme_color": "#07070C",
+  "background_color": "#F4EFE6",
+  "theme_color": "#F4EFE6",
   "orientation": "portrait",
   "icons": [
     {

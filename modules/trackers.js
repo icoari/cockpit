@@ -60,7 +60,7 @@ export class TrackersWidget {
 
   renderRow(slot, value) {
     const icon = ICONS[slot.iconKey] || ICONS.activity;
-    const since = value ? ago(value) : '—';
+    const since = value ? ago(value) : 'jamais noté';
     const dateValue = value || '';
     return `
       <label class="tracker-row" data-tracker="${escapeHTML(slot.key)}">
@@ -72,7 +72,7 @@ export class TrackersWidget {
         <input class="tracker-row__date" type="date"
                value="${escapeHTML(dateValue)}"
                max="${escapeHTML(todayISO())}"
-               aria-label="Dernière fois — ${escapeHTML(slot.label)}">
+               aria-label="Dernière fois : ${escapeHTML(slot.label)}">
       </label>
     `;
   }

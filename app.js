@@ -22,21 +22,17 @@ import { addNote, removeNote, notesByCategory, categorizeNote, recap } from './m
 import { VoiceRecorder, voiceSupported } from './modules/voice.js';
 
 // ---------- Theme ----------
+// The class lives on <html> so the page background (visible under the iOS
+// status bar and during overscroll) follows the theme too.
 function applyTheme() {
   const t = getSettings().theme || 'auto';
-  document.body.classList.remove('theme-light', 'theme-dark');
-  if (t === 'light') {
-    document.body.classList.add('theme-light');
-  } else if (t === 'dark') {
-    document.body.classList.add('theme-dark');
-  } else {
-    // auto: rely on prefers-color-scheme
-    if (window.matchMedia('(prefers-color-scheme: light)').matches) {
-      document.body.classList.add('theme-light');
-    } else {
-      document.body.classList.add('theme-dark');
-    }
+  const dark = t === 'dark' || (t === 'auto' && !window.matchMedia('(prefers-color-scheme: light)').matches);
+  for (const el of [document.documentElement, document.body]) {
+    el.classList.toggle('theme-dark', dark);
+    el.classList.toggle('theme-light', !dark);
   }
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m => { if (bg) m.content = bg; });
 }
 
 // ---------- Page header ----------
@@ -67,7 +63,7 @@ function setActiveTab(name, opts = {}) {
   // Instant scroll so the swipe / tap feels immediate; smooth scroll
   // sometimes finishes ~half a second after the swipe and reads as a
   // delayed shift.
-  window.scrollTo(0, 0);
+  document.querySelector('.app')?.scrollTo(0, 0);
   if (name === 'projets') refreshProjectStats();
   if (name === 'trains')  prioritizeTrainsByLocation();
   if (name === 'home' && widgets.home) widgets.home.refresh();
@@ -310,14 +306,29 @@ window.matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', 
 });
 
 // ---------- Projets overlay ----------
-function openProject(name, opts = {}) {
+// Shared chrome for every full-screen project: back to Bob, centred title,
+// optional action on the right.
+function projectBar(title, action = '') {
+  return `
+    <div class="project-bar">
+      <button class="project-bar__back" type="button" data-close>${ICONS.chevronLeft}<span>Bob</span></button>
+      <span class="project-bar__title">${escapeHTML(title)}</span>
+      ${action}
+    </div>`;
+}
+
+// Sibling apps served from the same GitHub Pages origin, embedded as-is.
+const FRAME_PROJECTS = {
+  piano:     { title: 'Piano',            src: '../piano/' },
+  speakeasy: { title: 'Speakeasy',        src: '../speakeasy/' },
+  roadtrip:  { title: 'Road trip Canada', src: '../roadtrip-canada/' },
+};
+
+// Mounts `html` in the overlay and returns { inner, close }. `onClose` runs
+// before the DOM is wiped (e.g. to stop a live mic recording).
+function showOverlay(html) {
   const overlay = document.getElementById('projectOverlay');
   const inner = document.getElementById('projectOverlayInner');
-  if (!overlay || !inner) return;
-
-  // Projects can register a cleanup (e.g. cancel a live mic recording) that
-  // must run before the DOM is wiped — otherwise the recorder is orphaned
-  // and the mic stays hot with no UI to stop it.
   const cleanup = { fn: null };
   const close = () => {
     try { cleanup.fn?.(); } catch {}
@@ -326,6 +337,15 @@ function openProject(name, opts = {}) {
     inner.innerHTML = '';
     document.body.classList.remove('project-open');
   };
+  inner.innerHTML = html;
+  inner.querySelector('[data-close]')?.addEventListener('click', close);
+  overlay.hidden = false;
+  document.body.classList.add('project-open');
+  return { inner, close, cleanup };
+}
+
+function openProject(name, opts = {}) {
+  if (!document.getElementById('projectOverlay')) return;
 
   if (name === 'health') {
     const currentTheme = getSettings().theme || 'auto';
@@ -335,18 +355,14 @@ function openProject(name, opts = {}) {
     // dictation recorder (from the "Dicter ma santé" shortcut).
     const doseParam = opts.dose ? `&dose=${encodeURIComponent(opts.dose)}` : '';
     const voiceParam = opts.voice ? '&voice=1' : '';
-    inner.innerHTML = `
+    const { inner } = showOverlay(`
       <div class="project-shell">
-        <div class="project-bar">
-          <button class="project-bar__back" type="button" data-close>← Bob</button>
-          <span class="project-bar__title">Suivi santé</span>
-          <button class="project-bar__action" type="button" data-action="analyze" aria-label="Analyse">${ICONS.lightbulb}</button>
-        </div>
+        ${projectBar('Suivi santé', `<button class="project-bar__action" type="button" data-action="analyze" aria-label="Analyse">${ICONS.lightbulb}</button>`)}
         <iframe class="project-frame" src="../health-tracker/?theme=${encodeURIComponent(currentTheme)}${doseParam}${voiceParam}&_v=${cacheBust}" allow="microphone; vibrate"></iframe>
         <div class="insights-overlay" hidden data-insights-overlay>
           <div class="insights-panel">
             <div class="insights-panel__head">
-              <span class="insights-panel__title">Analyse · Suivi santé</span>
+              <span class="insights-panel__title">Analyse du suivi</span>
               <button class="insights-panel__close" type="button" data-action="close-analyze" aria-label="Fermer">${ICONS.close}</button>
             </div>
             <div class="insights-panel__body" data-insights-body>
@@ -358,80 +374,35 @@ function openProject(name, opts = {}) {
           </div>
         </div>
       </div>
-    `;
-    inner.querySelector('[data-close]').addEventListener('click', close);
+    `);
     inner.querySelector('[data-action="analyze"]').addEventListener('click', () => openHealthInsights(inner));
     inner.querySelector('[data-action="close-analyze"]').addEventListener('click', () => {
       inner.querySelector('[data-insights-overlay]').hidden = true;
     });
-    overlay.hidden = false;
-    document.body.classList.add('project-open');
     return;
   }
 
-  if (name === 'piano') {
-    inner.innerHTML = `
+  const frame = FRAME_PROJECTS[name];
+  if (frame) {
+    showOverlay(`
       <div class="project-shell">
-        <div class="project-bar">
-          <button class="project-bar__back" type="button" data-close>← Bob</button>
-          <span class="project-bar__title">Piano</span>
-        </div>
-        <iframe class="project-frame" src="../piano/" loading="eager"></iframe>
+        ${projectBar(frame.title)}
+        <iframe class="project-frame" src="${frame.src}" loading="eager" allow="microphone"></iframe>
       </div>
-    `;
-    inner.querySelector('[data-close]').addEventListener('click', close);
-    overlay.hidden = false;
-    document.body.classList.add('project-open');
-    return;
-  }
-
-  if (name === 'speakeasy') {
-    inner.innerHTML = `
-      <div class="project-shell">
-        <div class="project-bar">
-          <button class="project-bar__back" type="button" data-close>← Bob</button>
-          <span class="project-bar__title">Speakeasy</span>
-        </div>
-        <iframe class="project-frame" src="../speakeasy/" loading="eager"></iframe>
-      </div>
-    `;
-    inner.querySelector('[data-close]').addEventListener('click', close);
-    overlay.hidden = false;
-    document.body.classList.add('project-open');
-    return;
-  }
-
-  if (name === 'roadtrip') {
-    inner.innerHTML = `
-      <div class="project-shell">
-        <div class="project-bar">
-          <button class="project-bar__back" type="button" data-close>← Bob</button>
-          <span class="project-bar__title">Road trip Canada</span>
-        </div>
-        <iframe class="project-frame" src="../roadtrip-canada/" loading="eager"></iframe>
-      </div>
-    `;
-    inner.querySelector('[data-close]').addEventListener('click', close);
-    overlay.hidden = false;
-    document.body.classList.add('project-open');
+    `);
     return;
   }
 
   if (name === 'writer') {
-    inner.innerHTML = `<div class="project-shell project-shell--writer" id="writerHost"></div>`;
+    const { close } = showOverlay(`<div class="project-shell project-shell--writer" id="writerHost"></div>`);
     new WriterApp(document.getElementById('writerHost'), { onExit: close });
-    overlay.hidden = false;
-    document.body.classList.add('project-open');
     return;
   }
 
   if (name === 'memory') {
-    inner.innerHTML = `
+    const { inner, cleanup } = showOverlay(`
       <div class="project-shell">
-        <div class="project-bar">
-          <button class="project-bar__back" type="button" data-close>← Bob</button>
-          <span class="project-bar__title">Mémoire</span>
-        </div>
+        ${projectBar('Mémoire')}
         <div class="notes">
           <div class="notes__bar">
             ${voiceSupported() ? `<button class="notes__action notes__action--voice" type="button" data-notes="voice">${ICONS.mic}<span>Note vocale</span></button>` : ''}
@@ -446,21 +417,15 @@ function openProject(name, opts = {}) {
           <div class="notes__list" data-notes-list></div>
         </div>
       </div>
-    `;
-    inner.querySelector('[data-close]').addEventListener('click', close);
-    overlay.hidden = false;
-    document.body.classList.add('project-open');
+    `);
     cleanup.fn = initNotes(inner);
     return;
   }
 
   if (name === 'beiue') {
-    inner.innerHTML = `
+    const { inner } = showOverlay(`
       <div class="project-shell">
-        <div class="project-bar">
-          <button class="project-bar__back" type="button" data-close>← Bob</button>
-          <span class="project-bar__title">BEIUE</span>
-        </div>
+        ${projectBar('BEIUE')}
         <div class="beiue-form">
           <p class="beiue-form__intro">Truth engine. Renseigne la cible, le moteur fait le reste.</p>
           <label class="beiue-field">
@@ -484,8 +449,7 @@ function openProject(name, opts = {}) {
           <button type="button" class="beiue-launch" id="beiueLaunch" disabled>Lancer</button>
         </div>
       </div>
-    `;
-    inner.querySelector('[data-close]').addEventListener('click', close);
+    `);
 
     const nameInput = inner.querySelector('#beiueName');
     const launchBtn = inner.querySelector('#beiueLaunch');
@@ -523,8 +487,6 @@ function openProject(name, opts = {}) {
       window.open(`https://icoari.github.io/BEIUE/?${qs}`, '_blank', 'noopener,noreferrer');
     });
 
-    overlay.hidden = false;
-    document.body.classList.add('project-open');
     setTimeout(() => nameInput.focus(), 280);
     return;
   }
@@ -539,10 +501,6 @@ function initProjects() {
     }
   });
   refreshProjectStats();
-  // Refresh stats every time the Projets tab becomes active.
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) refreshProjectStats();
-  });
 }
 
 function refreshProjectStats() {
@@ -620,13 +578,13 @@ function refreshProjectStats() {
     else setStat('roadtrip', 'Souvenirs · août 2026', null);
   } catch {}
 
-  // Piano — lessons done
+  // Piano — saved transcriptions (v2 storage; the v1 lessons are gone)
   try {
-    const raw = localStorage.getItem('piano-progress-v1');
-    const p = raw ? JSON.parse(raw) : null;
-    const done = p ? Object.keys(p.lessons || {}).filter(k => p.lessons[k]).length : 0;
-    setStat('piano', done ? 'Leçons' : 'L\'atelier du clavier', done ? `${done}/10` : null);
-  } catch { setStat('piano', 'L\'atelier du clavier', null); }
+    const p = JSON.parse(localStorage.getItem('piano-v2-data') || 'null');
+    const scores = p?.scores;
+    const n = Array.isArray(scores) ? scores.length : Object.keys(scores || {}).length;
+    setStat('piano', n ? 'Partitions' : 'Aucune partition', n ? `${n}` : null);
+  } catch { setStat('piano', 'Aucune partition', null); }
 
   // Speakeasy — série de jours (si l'app a tourné dans Bob)
   try {
@@ -679,7 +637,7 @@ function initNotes(scope) {
     if (rec) { try { rec.cancel(); } catch {} rec = null; }
     try { rec = new VoiceRecorder(); await rec.start(); }
     catch (e) { showPanel(`<div class="notes__err">Micro refusé : ${escapeHTML(e.message || '')}</div>`); return; }
-    showPanel(`<button class="cv-rec" type="button" data-stop>${ICONS.mic}<span>${escapeHTML(label)} — tape pour arrêter</span></button>`);
+    showPanel(`<button class="cv-rec" type="button" data-stop>${ICONS.mic}<span>${escapeHTML(label)}, tape pour arrêter</span></button>`);
     panel.querySelector('[data-stop]').addEventListener('click', async () => {
       haptic(8);
       showPanel(working('Transcription…'));
@@ -795,7 +753,7 @@ async function openHealthInsights(scope) {
       },
     });
   } catch (e) {
-    body.innerHTML = `<p class="insights-panel__placeholder" style="color:var(--danger)">Échec : ${escapeHTML(e.message || String(e))}</p>`;
+    body.innerHTML = `<p class="insights-panel__placeholder insights-panel__placeholder--error">Échec : ${escapeHTML(e.message || String(e))}</p>`;
   }
 }
 
@@ -811,7 +769,7 @@ initSwipeNavigation();
 // Project cards on the Home page send a custom event — route it through openProject.
 document.addEventListener('bob-open-project', (e) => {
   const name = e.detail?.project;
-  if (name === 'health' || name === 'writer' || name === 'beiue' || name === 'memory' || name === 'piano' || name === 'speakeasy') {
+  if (name === 'health' || name === 'writer' || name === 'beiue' || name === 'memory' || name in FRAME_PROJECTS) {
     openProject(name, { voice: e.detail?.voice });
   }
 });
@@ -825,29 +783,13 @@ document.addEventListener('bob-goto-tab', (e) => {
 // "Dicter un event" → a dedicated dictation overlay that auto-starts. Opened
 // straight from the tap (gesture preserved → mic works without re-prompt).
 function openEventDictation() {
-  const overlay = document.getElementById('projectOverlay');
-  const inner = document.getElementById('projectOverlayInner');
-  if (!overlay || !inner) return;
-  let dispose = null;
-  const close = () => {
-    try { dispose?.(); } catch {}
-    dispose = null;
-    overlay.hidden = true;
-    inner.innerHTML = '';
-    document.body.classList.remove('project-open');
-  };
-  inner.innerHTML = `
+  if (!document.getElementById('projectOverlay')) return;
+  const { close, cleanup } = showOverlay(`
     <div class="project-shell">
-      <div class="project-bar">
-        <button class="project-bar__back" type="button" data-close>← Bob</button>
-        <span class="project-bar__title">Dicter un event</span>
-      </div>
+      ${projectBar('Dicter un événement')}
       <div class="dictate-host" id="dictateHost"></div>
-    </div>`;
-  inner.querySelector('[data-close]').addEventListener('click', close);
-  overlay.hidden = false;
-  document.body.classList.add('project-open');
-  dispose = runEventDictation(document.getElementById('dictateHost'), {
+    </div>`);
+  cleanup.fn = runEventDictation(document.getElementById('dictateHost'), {
     onClose: close,
     onCreated: () => { try { widgets.calendar?.refresh(); } catch {} },
   });

@@ -1,4 +1,4 @@
-const CACHE = 'bob-v85';
+const CACHE = 'bob-v86';
 const ASSETS = [
   './',
   './index.html',
@@ -33,6 +33,9 @@ const ASSETS = [
   './modules/voice.js',
   './modules/memory.js',
   './icons/icon.svg',
+  './fonts/fraunces.woff2',
+  './fonts/fraunces-italic.woff2',
+  './fonts/inter.woff2',
 ];
 
 self.addEventListener('install', (e) => {

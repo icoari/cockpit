@@ -120,7 +120,7 @@ export class SettingsPanel {
 
       ${this.groupLabel('Services')}
 
-      ${this.section('idfm', 'Trains — clé IDFM', s.idfm.apiKey ? ok('configurée') : dim('manquante'), `
+      ${this.section('idfm', 'Trains, clé IDFM', s.idfm.apiKey ? ok('configurée') : dim('manquante'), `
         <div class="settings-section__desc">
           Inscription gratuite sur <a href="https://prim.iledefrance-mobilites.fr/" target="_blank" rel="noopener">prim.iledefrance-mobilites.fr</a>.
         </div>
@@ -144,7 +144,7 @@ export class SettingsPanel {
         </div>
         <input class="input" type="url" placeholder="https://…/v1/messages ou /chat/completions" data-field="llmEndpoint" value="${escapeHTML(s.llm?.endpoint || '')}" autocomplete="off" spellcheck="false">
         <input class="input" type="password" placeholder="API key" data-field="llmApiKey" value="${escapeHTML(s.llm?.apiKey || '')}" autocomplete="off" spellcheck="false">
-        <input class="input" type="text" placeholder="Modèle (ex. claude-sonnet-4-5)" data-field="llmModel" value="${escapeHTML(s.llm?.model || '')}" autocomplete="off">
+        <input class="input" type="text" placeholder="Modèle (ex. claude-sonnet-5)" data-field="llmModel" value="${escapeHTML(s.llm?.model || '')}" autocomplete="off">
         <div class="settings-2col">
           <select class="input" data-field="llmFormat">
             <option value="openai"    ${(s.llm?.format || 'openai') === 'openai' ? 'selected' : ''}>OpenAI</option>
@@ -208,7 +208,7 @@ export class SettingsPanel {
 
       ${this.groupLabel('Widgets')}
 
-      ${this.section('bins', 'Encombrants', s.encombrants?.address ? dim(s.encombrants.address) : dim('—'), `
+      ${this.section('bins', 'Encombrants', s.encombrants?.address ? dim(s.encombrants.address) : dim('non renseigné'), `
         <input class="input" type="text" placeholder="Adresse" data-field="encombrantsAddress" value="${escapeHTML(s.encombrants?.address || '')}">
         <select class="input" data-field="encombrantsPattern">
           ${Object.entries(ENCOMBRANTS_PATTERNS).map(([key, p]) => `
@@ -495,8 +495,8 @@ export class SettingsPanel {
     const perm = permissionStatus();
     const sub = await isSubscribed();
     if (sub && perm === 'granted')      el.textContent = '✓ Notifications actives sur cet appareil.';
-    else if (perm === 'denied')         el.textContent = 'Permission refusée — autorise les notifications dans les réglages du navigateur.';
-    else                                el.textContent = 'Notifications inactives — clique « Activer ».';
+    else if (perm === 'denied')         el.textContent = 'Permission refusée : autorise les notifications dans les réglages du navigateur.';
+    else                                el.textContent = 'Notifications inactives, touche « Activer ».';
   }
 
   // ---------- Cloud sync (end-to-end encrypted) ----------
@@ -544,7 +544,7 @@ export class SettingsPanel {
   }
 
   async runSetup() {
-    const pp = prompt('Choisis une passphrase forte (au moins 12 caractères). Note-la dans 1Password — sans elle les données sont irrécupérables.');
+    const pp = prompt('Choisis une passphrase forte (au moins 12 caractères). Note-la dans 1Password : sans elle les données sont irrécupérables.');
     if (!pp) return;
     if (pp.length < 12) { alert('Minimum 12 caractères.'); return; }
     const confirm2 = prompt('Re-tape la passphrase pour confirmer :');

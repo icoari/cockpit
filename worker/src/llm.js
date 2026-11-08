@@ -67,6 +67,17 @@ export async function handleLlm(request, env) {
     clearTimeout(timer);
   }
 
+  // Upstream rejections (bad parameter, unknown model) are only visible here:
+  // log the start of their message for diagnosis.
+  if (upstream.status >= 400) {
+    const text = await upstream.text().catch(() => '');
+    console.warn(`llm upstream ${upstream.status} (${format}, ${new URL(endpoint).hostname}): ${text.slice(0, 300)}`);
+    return new Response(text, {
+      status: upstream.status,
+      headers: { 'Content-Type': upstream.headers.get('Content-Type') || 'application/json', 'Cache-Control': 'no-store' },
+    });
+  }
+
   // Pass through the response — including streaming bodies — to the client.
   const ct = upstream.headers.get('Content-Type') || 'application/json';
   return new Response(upstream.body, {

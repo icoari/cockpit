@@ -68,12 +68,24 @@ function buildBody(c, messages, opts) {
   // OpenAI-compatible
   const body = {
     messages,
-    temperature: opts.temperature ?? 0.3,
     max_tokens: opts.maxTokens ?? 2048,
   };
+  if (!NO_SAMPLING.test((c.model || '').toLowerCase())) body.temperature = opts.temperature ?? 0.3;
   if (opts.stream) body.stream = true;
   if (c.model) body.model = c.model;
   return body;
+}
+
+// A deployment name can hide the model id, so the rules above may miss: when
+// the upstream rejects a parameter by name, drop it and let the caller retry.
+const DROPPABLE = ['temperature', 'top_p', 'thinking', 'output_config'];
+function dropRejectedParams(body, errorText) {
+  const t = (errorText || '').toLowerCase();
+  let dropped = false;
+  for (const k of DROPPABLE) {
+    if (k in body && t.includes(k)) { delete body[k]; dropped = true; }
+  }
+  return dropped;
 }
 
 // Call the Worker proxy. Returns the raw Response so callers can stream.
@@ -91,13 +103,20 @@ async function callProxy(messages, opts) {
     'X-LLM-Format': c.format || 'openai',
   };
 
-  const resp = await fetch(`${WORKER_URL}/llm`, {
+  const body = buildBody(c, messages, opts);
+  const send = () => fetch(`${WORKER_URL}/llm`, {
     method: 'POST',
     headers,
-    body: JSON.stringify(buildBody(c, messages, opts)),
+    body: JSON.stringify(body),
     signal: opts.signal,
   });
 
+  let resp = await send();
+  if (resp.status === 400) {
+    const txt = await resp.text().catch(() => '');
+    if (!dropRejectedParams(body, txt)) throw new Error(`HTTP 400 : ${txt.slice(0, 400)}`);
+    resp = await send();
+  }
   if (!resp.ok) {
     const txt = await resp.text().catch(() => '');
     throw new Error(`HTTP ${resp.status} : ${txt.slice(0, 400)}`);

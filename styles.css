@@ -214,6 +214,11 @@ svg { flex-shrink: 0; }
 @media (display-mode: standalone) {
   html { min-height: min(100lvh, calc(100% + env(safe-area-inset-top))); }
 }
+/* .app is the only scroller. body's overflow propagates to the viewport, so
+   the taller document above can no longer be dragged by the status-bar
+   height (the page « moved » under the finger). */
+body { overflow: hidden; }
+.app { overflow-x: hidden; }
 
 /* ============================================================
    Shell

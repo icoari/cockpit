@@ -10,6 +10,7 @@ export const KEY_SOURCES = KV_PREFIX + 'sources';
 export const KEY_PUSH = KV_PREFIX + 'push';
 export const KEY_MONITORING = KV_PREFIX + 'monitoring';
 export const KEY_ALERTED_DISRUPTIONS = KV_PREFIX + 'alertedDisruptions';
+// Health keys: the health app is gone, kept so a wipe clears old values.
 export const KEY_HEALTH_PING = KV_PREFIX + 'healthPing';
 export const KEY_LAST_TRAIN_ALERTED = KV_PREFIX + 'lastTrainAlerted';
 export const KEY_TREATMENT = KV_PREFIX + 'treatment';      // medication schedule

@@ -1,6 +1,6 @@
 // Workers AI — Whisper speech-to-text (paid plan).
 //
-//   /transcribe   Dictation used everywhere in Bob (health logging, writer,
+//   /transcribe   Dictation used everywhere in Bob (agenda, writer,
 //                 calendar events, voice notes). Runs on Cloudflare's GPU
 //                 edge, no external API.
 //

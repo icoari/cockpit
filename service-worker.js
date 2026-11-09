@@ -1,4 +1,4 @@
-const CACHE = 'bob-v88';
+const CACHE = 'bob-v89';
 const ASSETS = [
   './',
   './index.html',
@@ -23,7 +23,6 @@ const ASSETS = [
   './modules/sync.js',
   './modules/llm.js',
   './modules/feed.js',
-  './modules/insights.js',
   './modules/copilot.js',
   './modules/pro.js',
   './modules/digest.js',
@@ -134,8 +133,8 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     // matchAll returns ALL same-origin clients — on github.io that includes
-    // the standalone health-tracker app, which has no message listener and
-    // would swallow the tap. Only target clients under Bob's scope.
+    // the other standalone apps, which have no message listener and would
+    // swallow the tap. Only target clients under Bob's scope.
     const targets = all.filter(c => c.url.startsWith(self.registration.scope));
     for (const c of targets) {
       if ('focus' in c) {

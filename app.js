@@ -15,7 +15,6 @@ import { PharmaciesWidget } from './modules/pharmacies.js';
 import { SettingsPanel } from './modules/settings.js';
 import { WriterApp } from './modules/writer.js';
 import { ProWidget } from './modules/pro.js';
-import { analyzeHealth } from './modules/insights.js';
 import { pushMonitoring } from './modules/notifications.js';
 import { TrackersWidget } from './modules/trackers.js';
 import { addNote, removeNote, notesByCategory, categorizeNote, recap } from './modules/memory.js';
@@ -125,29 +124,17 @@ function initTabs() {
   const goto = params.get('goto');
   setActiveTab(VISIBLE_TABS.includes(goto) ? goto : 'home');
 
-  // A medication reminder deep-links into the health project on a dose
-  // (?project=health&dose=midi) — open it after the shell settles.
-  if (params.get('project') === 'health') {
-    const dose = params.get('dose') || undefined;
-    setTimeout(() => openProject('health', { dose }), 200);
-  }
-
   // Consume the params: a sync pull triggers location.reload(), which would
-  // otherwise replay them — re-marking a dose the user just un-took, or
-  // forcing the tab back on every pull.
+  // otherwise replay them and force the tab back on every pull.
   if (location.search) history.replaceState(null, '', location.pathname);
 }
 
-// Route a notification URL (carrying ?goto / ?project / ?dose) without reload.
+// Route a notification URL (carrying ?goto) without reload.
 function routeNotificationUrl(rawUrl) {
   try {
     const u = new URL(rawUrl, location.href);
     const tab = u.searchParams.get('goto');
     if (VISIBLE_TABS.includes(tab)) setActiveTab(tab);
-    if (u.searchParams.get('project') === 'health') {
-      const dose = u.searchParams.get('dose') || undefined;
-      openProject('health', { dose });
-    }
   } catch {}
 }
 
@@ -317,11 +304,12 @@ function projectBar(title, action = '') {
     </div>`;
 }
 
-// Sibling apps served from the same GitHub Pages origin, embedded as-is.
+// Sibling apps embedded as-is. NY English Coach lives on its own Worker
+// origin: inside the frame its storage is partitioned, so the bar also
+// offers to open it in its own tab.
 const FRAME_PROJECTS = {
-  piano:     { title: 'Piano',            src: '../piano/' },
-  speakeasy: { title: 'Speakeasy',        src: '../speakeasy/' },
-  roadtrip:  { title: 'Road trip Canada', src: '../roadtrip-canada/' },
+  piano:   { title: 'Piano',            src: '../piano/' },
+  nycoach: { title: 'NY English Coach', src: 'https://ny-english-coach.jz7w76ry59.workers.dev/', external: true },
 };
 
 // Mounts `html` in the overlay and returns { inner, close }. `onClose` runs
@@ -347,47 +335,15 @@ function showOverlay(html) {
 function openProject(name, opts = {}) {
   if (!document.getElementById('projectOverlay')) return;
 
-  if (name === 'health') {
-    const currentTheme = getSettings().theme || 'auto';
-    const cacheBust = Date.now();
-    // A medication reminder deep-links to a specific dose (?dose=midi) so the
-    // health app opens straight onto it and marks it taken. ?voice=1 arms the
-    // dictation recorder (from the "Dicter ma santé" shortcut).
-    const doseParam = opts.dose ? `&dose=${encodeURIComponent(opts.dose)}` : '';
-    const voiceParam = opts.voice ? '&voice=1' : '';
-    const { inner } = showOverlay(`
-      <div class="project-shell">
-        ${projectBar('Suivi santé', `<button class="project-bar__action" type="button" data-action="analyze" aria-label="Analyse">${ICONS.lightbulb}</button>`)}
-        <iframe class="project-frame" src="../health-tracker/?theme=${encodeURIComponent(currentTheme)}${doseParam}${voiceParam}&_v=${cacheBust}" allow="microphone; vibrate"></iframe>
-        <div class="insights-overlay" hidden data-insights-overlay>
-          <div class="insights-panel">
-            <div class="insights-panel__head">
-              <span class="insights-panel__title">Analyse du suivi</span>
-              <button class="insights-panel__close" type="button" data-action="close-analyze" aria-label="Fermer">${ICONS.close}</button>
-            </div>
-            <div class="insights-panel__body" data-insights-body>
-              <p class="insights-panel__placeholder">Lecture du journal…</p>
-            </div>
-            <div class="insights-panel__foot">
-              <span class="insights-panel__hint">Observations factuelles, aucun diagnostic.</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    `);
-    inner.querySelector('[data-action="analyze"]').addEventListener('click', () => openHealthInsights(inner));
-    inner.querySelector('[data-action="close-analyze"]').addEventListener('click', () => {
-      inner.querySelector('[data-insights-overlay]').hidden = true;
-    });
-    return;
-  }
-
   const frame = FRAME_PROJECTS[name];
   if (frame) {
+    const action = frame.external
+      ? `<a class="project-bar__action" href="${frame.src}" target="_blank" rel="noopener" aria-label="Ouvrir à part">${ICONS.external}</a>`
+      : '';
     showOverlay(`
       <div class="project-shell">
-        ${projectBar(frame.title)}
-        <iframe class="project-frame" src="${frame.src}" loading="eager" allow="microphone"></iframe>
+        ${projectBar(frame.title, action)}
+        <iframe class="project-frame" src="${frame.src}" loading="eager" allow="microphone; autoplay; screen-wake-lock"></iframe>
       </div>
     `);
     return;
@@ -514,30 +470,6 @@ function refreshProjectStats() {
     el.innerHTML = `${label} <span class="projet-card__stat-value">${value}</span>`;
   };
 
-  // Suivi santé — read entries, compute filled-days / total + last entry age
-  try {
-    const raw = localStorage.getItem('health-tracker-v1');
-    const data = raw ? JSON.parse(raw) : null;
-    const entries = data?.entries || {};
-    const events = Array.isArray(data?.events) ? data.events : [];
-    const days = Object.keys(entries);
-    const totalSlots = days.reduce((sum, d) => sum + Object.keys(entries[d] || {}).length, 0);
-    const total = totalSlots + events.length;
-    if (total === 0) {
-      setStat('health', 'Aucune entrée', null);
-    } else {
-      const [sy, sm, sd] = (data?.startDate || '2026-05-14').split('-').map(Number);
-      const startDate = new Date(sy, sm - 1, sd);   // local midnight, not UTC
-      const today = new Date(); today.setHours(0,0,0,0);
-      const dayN = Math.max(1, Math.floor((today - startDate) / 86400000) + 1);
-      const totalPeriod = 31;
-      const label = dayN <= totalPeriod
-        ? `Jour ${dayN} / ${totalPeriod}`
-        : `J+${dayN - totalPeriod} post-traitement`;
-      setStat('health', label, `${total} entrées`);
-    }
-  } catch { setStat('health', 'Aucune entrée', null); }
-
   // Écrire — chapter count + total word count
   try {
     const raw = localStorage.getItem('bob-writer-v1');
@@ -559,25 +491,6 @@ function refreshProjectStats() {
     setStat('memory', notes.length ? 'Notes' : 'Aucune note', notes.length ? `${notes.length}` : null);
   } catch { setStat('memory', 'Notes', null); }
 
-  // Road trip Canada — countdown, then the day's stage during the trip
-  try {
-    const start = new Date(2026, 7, 11);
-    const end = new Date(2026, 7, 26);
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const STAGE_BY_DAY = {
-      11: 'Montréal', 12: 'Montréal', 13: 'Montréal', 14: 'Québec', 15: 'Québec',
-      16: 'Charlevoix', 17: 'Tadoussac', 18: 'Tadoussac', 19: 'Fjord du Saguenay',
-      20: 'Trois-Rivières', 21: 'Ottawa', 22: 'Toronto', 23: 'Toronto', 24: 'Toronto',
-      25: 'Mille-Îles', 26: 'Retour Montréal',
-    };
-    if (today < start) setStat('roadtrip', 'Départ dans', `J-${Math.ceil((start - today) / 86400000)}`);
-    else if (today <= end) {
-      const n = Math.floor((today - start) / 86400000) + 1;
-      setStat('roadtrip', `Jour ${n}/16`, STAGE_BY_DAY[today.getDate()] || 'En voyage');
-    }
-    else setStat('roadtrip', 'Souvenirs · août 2026', null);
-  } catch {}
-
   // Piano — saved transcriptions (v2 storage; the v1 lessons are gone)
   try {
     const p = JSON.parse(localStorage.getItem('piano-v2-data') || 'null');
@@ -585,13 +498,6 @@ function refreshProjectStats() {
     const n = Array.isArray(scores) ? scores.length : Object.keys(scores || {}).length;
     setStat('piano', n ? 'Partitions' : 'Aucune partition', n ? `${n}` : null);
   } catch { setStat('piano', 'Aucune partition', null); }
-
-  // Speakeasy — série de jours (si l'app a tourné dans Bob)
-  try {
-    const sp = JSON.parse(localStorage.getItem('speakeasy-v1') || 'null');
-    const streak = sp?.meta?.streak || 0;
-    setStat('speakeasy', streak ? 'Série' : 'Le comptoir d\'anglais', streak ? streak + ' j' : null);
-  } catch { setStat('speakeasy', 'Le comptoir d\'anglais', null); }
 
   // BEIUE is a launcher — no live stats
 }
@@ -708,7 +614,6 @@ function initNotes(scope) {
   return () => { if (rec) { try { rec.cancel(); } catch {} rec = null; } };
 }
 
-// ---------- Health insights panel (lives inside the Suivi santé project shell) ----------
 function tinyMarkdown(s) {
   let html = escapeHTML(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/((?:^|\n)(?:- [^\n]+\n?)+)/g, (block) => {
@@ -717,44 +622,6 @@ function tinyMarkdown(s) {
   });
   html = html.replace(/\n{2,}/g, '</p><p>');
   return `<p>${html}</p>`;
-}
-
-async function openHealthInsights(scope) {
-  const overlay = scope.querySelector('[data-insights-overlay]');
-  const body = scope.querySelector('[data-insights-body]');
-  overlay.hidden = false;
-  body.innerHTML = '<p class="insights-panel__placeholder">Lecture du journal…</p>';
-
-  let entries = {};
-  let events = [];
-  try {
-    const raw = localStorage.getItem('health-tracker-v1');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      entries = parsed?.entries || {};
-      events = Array.isArray(parsed?.events) ? parsed.events : [];
-    }
-  } catch {}
-
-  if (!Object.keys(entries).length && !events.length) {
-    body.innerHTML = '<p class="insights-panel__placeholder">Aucune entrée à analyser pour l\'instant.</p>';
-    return;
-  }
-
-  body.innerHTML = '<p class="insights-panel__placeholder">Analyse en cours…</p>';
-  let acc = '';
-  try {
-    await analyzeHealth({
-      entries,
-      events,
-      onChunk: (delta) => {
-        acc += delta;
-        body.innerHTML = tinyMarkdown(acc);
-      },
-    });
-  } catch (e) {
-    body.innerHTML = `<p class="insights-panel__placeholder insights-panel__placeholder--error">Échec : ${escapeHTML(e.message || String(e))}</p>`;
-  }
 }
 
 // ---------- Init ----------
@@ -769,8 +636,8 @@ initSwipeNavigation();
 // Project cards on the Home page send a custom event — route it through openProject.
 document.addEventListener('bob-open-project', (e) => {
   const name = e.detail?.project;
-  if (name === 'health' || name === 'writer' || name === 'beiue' || name === 'memory' || name in FRAME_PROJECTS) {
-    openProject(name, { voice: e.detail?.voice });
+  if (name === 'writer' || name === 'beiue' || name === 'memory' || name in FRAME_PROJECTS) {
+    openProject(name);
   }
 });
 

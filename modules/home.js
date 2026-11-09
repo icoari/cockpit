@@ -92,26 +92,6 @@ function getDigestHeadlines() {
 function getProjectStats() {
   const out = {};
   try {
-    const raw = localStorage.getItem('health-tracker-v1');
-    const data = raw ? JSON.parse(raw) : null;
-    const entries = data?.entries || {};
-    const events = Array.isArray(data?.events) ? data.events : [];
-    const days = Object.keys(entries);
-    const total = days.reduce((s, d) => s + Object.keys(entries[d] || {}).length, 0) + events.length;
-    if (total === 0) {
-      out.health = { label: 'Suivi santé', sub: 'Aucune entrée', accent: 'p-health' };
-    } else {
-      // Parse as LOCAL midnight — new Date('YYYY-MM-DD') is UTC midnight and
-      // undercounts by one day in UTC+ timezones.
-      const [sy, sm, sd] = (data?.startDate || '2026-05-14').split('-').map(Number);
-      const startDate = new Date(sy, sm - 1, sd);
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const dayN = Math.max(1, Math.floor((today - startDate) / 86400000) + 1);
-      const phase = dayN <= 31 ? `Jour ${dayN} / 31` : `J+${dayN - 31} post-traitement`;
-      out.health = { label: 'Suivi santé', sub: `${phase} · ${total} entrées`, accent: 'p-health' };
-    }
-  } catch {}
-  try {
     const raw = localStorage.getItem('bob-writer-v1');
     const data = raw ? JSON.parse(raw) : null;
     const chapters = data?.chapters || [];
@@ -206,14 +186,14 @@ export class HomeWidget {
       <section class="home-section" data-section="quick">
         <div class="home-section__head"><span class="home-section__label">Accès rapide</span></div>
         <div class="home-quick">
-          <button class="home-quick__btn home-quick__btn--health" type="button" data-home-voice aria-label="Dicter une note santé">
-            <span class="home-quick__icon">${ICONS.mic}</span><span class="home-quick__label">Santé</span>
-          </button>
           <button class="home-quick__btn home-quick__btn--event" type="button" data-home-event aria-label="Dicter un événement">
             <span class="home-quick__icon">${ICONS.mic}</span><span class="home-quick__label">Agenda</span>
           </button>
           <button class="home-quick__btn home-quick__btn--memory" type="button" data-home-memory>
             <span class="home-quick__icon">${ICONS.brain}</span><span class="home-quick__label">Mémoire</span>
+          </button>
+          <button class="home-quick__btn home-quick__btn--writer" type="button" data-home-writer>
+            <span class="home-quick__icon">${ICONS.feather}</span><span class="home-quick__label">Écrire</span>
           </button>
         </div>
       </section>
@@ -237,9 +217,9 @@ export class HomeWidget {
         this.regenerateGreeting(true);
         return;
       }
-      if (e.target.closest('[data-home-voice]')) {
+      if (e.target.closest('[data-home-writer]')) {
         haptic(6);
-        document.dispatchEvent(new CustomEvent('bob-open-project', { detail: { project: 'health', voice: true } }));
+        document.dispatchEvent(new CustomEvent('bob-open-project', { detail: { project: 'writer' } }));
         return;
       }
       if (e.target.closest('[data-home-event]')) {
@@ -404,7 +384,6 @@ export class HomeWidget {
     if (!el) return;
     const p = this.context.projects;
     const cards = [];
-    if (p.health)   cards.push(this.projectCard('health',   p.health));
     if (p.writer)   cards.push(this.projectCard('writer',   p.writer));
     if (p.coiffeur) cards.push(this.projectCard('coiffeur-info', p.coiffeur, false));
     el.innerHTML = cards.join('');

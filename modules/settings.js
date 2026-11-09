@@ -68,7 +68,7 @@ export class SettingsPanel {
     const themeLabel = s.theme === 'dark' ? 'Sombre' : s.theme === 'light' ? 'Clair' : 'Auto';
     const rssOn = s.aiSources.filter(x => x.enabled).length;
     const ytOn = (s.youtube?.channels || []).filter(c => c.enabled).length;
-    const alertsOn = [s.alerts?.trainAlerts !== false, s.alerts?.morningBrief !== false, !!s.alerts?.healthReminder].filter(Boolean).length;
+    const alertsOn = [s.alerts?.trainAlerts !== false, s.alerts?.morningBrief !== false].filter(Boolean).length;
     const ok = (label) => `<span class="acc__summary--ok">${escapeHTML(label)}</span>`;
     const dim = (label) => escapeHTML(label);
 
@@ -112,10 +112,6 @@ export class SettingsPanel {
         <label class="label-row" style="display:block">
           <input type="checkbox" data-field="alertBrief" ${s.alerts?.morningBrief !== false ? 'checked' : ''}>
           Brief matinal (7h)
-        </label>
-        <label class="label-row" style="display:block">
-          <input type="checkbox" data-field="alertHealth" ${s.alerts?.healthReminder ? 'checked' : ''}>
-          Rappel Suivi santé soir (23h)
         </label>
       `)}
 
@@ -301,7 +297,6 @@ export class SettingsPanel {
           }
           case 'alertTrains':        (settings.alerts = settings.alerts || {}).trainAlerts = !!v; pushMonitoring(); break;
           case 'alertBrief':         (settings.alerts = settings.alerts || {}).morningBrief = !!v; pushMonitoring(); break;
-          case 'alertHealth':        (settings.alerts = settings.alerts || {}).healthReminder = !!v; pushMonitoring(); break;
         }
         save();
         this.onChange();
@@ -378,9 +373,9 @@ export class SettingsPanel {
         return;
       }
       if (action === 'reset') {
-        // Wipes local state, chapters, health journal AND notes — and the
+        // Wipes local state, chapters AND notes — and the
         // wiped state then syncs to the cloud. Never one tap.
-        if (!confirm('Tout réinitialiser ? Réglages, chapitres, journal santé et notes seront effacés (et la sauvegarde cloud sera écrasée).')) return;
+        if (!confirm('Tout réinitialiser ? Réglages, chapitres et notes seront effacés (et la sauvegarde cloud sera écrasée).')) return;
         resetAll();
         this.render();
         this.onChange();

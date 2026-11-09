@@ -140,7 +140,6 @@ export async function pushMonitoring() {
     alerts: {
       trainAlerts:     alerts.trainAlerts     !== false,
       morningBrief:    alerts.morningBrief    !== false,
-      healthReminder:  alerts.healthReminder  !== false,
     },
   };
   try {

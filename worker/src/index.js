@@ -6,7 +6,6 @@ import { handleGetSalt, handleSetup, handleSyncData, handleWipe } from './sync.j
 import { handleGetFeed, handleSources, handleFeedRefresh } from './feed.js';
 import { handlePushSubscribe, handlePushUnsubscribe, handlePushTest } from './push.js';
 import { handleMonitoring } from './monitoring.js';
-import { handleHealthPing, handleTreatment, handleMed } from './health.js';
 import { handleGoogleExchange, handleGoogleToken } from './google.js';
 import { handleLlm } from './llm.js';
 import { handleTranscribe } from './ai.js';
@@ -32,9 +31,6 @@ async function route(request, env, ctx, url) {
   if (p === '/vapid/public')        return json({ publicKey: env.VAPID_PUBLIC_KEY || '' });
 
   if (p === '/monitoring')          return handleMonitoring(request, env);
-  if (p === '/health/ping')         return assertMethod(request, 'POST', () => handleHealthPing(request, env));
-  if (p === '/health/treatment')    return handleTreatment(request, env);
-  if (p === '/health/med')          return assertMethod(request, 'POST', () => handleMed(request, env));
   if (p === '/cron/run')            return assertMethod(request, 'POST', () => handleCronRun(request, env, url));
 
   if (p === '/llm')                 return assertMethod(request, 'POST', () => handleLlm(request, env));

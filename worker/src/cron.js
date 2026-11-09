@@ -2,15 +2,13 @@
 //
 // Cron schedule (UTC):
 //   */10 * * * *     feed aggregation
-//   */15 4-23 * * *  IDFM disruption watch + medication reminders
+//   */15 4-23 * * *  IDFM disruption watch
 //   0 5 * * *        morning brief push (7h Paris summer)
 //   0 16 * * *       last-train-of-tonight check (18h Paris summer)
-//   0 21 * * *       health-tracker evening reminder (23h Paris summer)
 
 import { json, requireAuth } from './http.js';
 import { aggregateFeed } from './feed.js';
 import { checkDisruptions, checkLastTrainsTonight } from './idfm.js';
-import { checkMedicationReminders, sendHealthReminder } from './health.js';
 import { sendMorningBriefPush } from './push.js';
 
 // Task name → function. Names are the /cron/run?task= values.
@@ -19,16 +17,13 @@ const TASKS = {
   'disruptions': checkDisruptions,
   'last-trains': checkLastTrainsTonight,
   'brief':       sendMorningBriefPush,
-  'health':      sendHealthReminder,
-  'med':         checkMedicationReminders,
 };
 
 const SCHEDULE = {
   '*/10 * * * *':    ['feed'],
-  '*/15 4-23 * * *': ['disruptions', 'med'],
+  '*/15 4-23 * * *': ['disruptions'],
   '0 5 * * *':       ['brief'],
   '0 16 * * *':      ['last-trains'],
-  '0 21 * * *':      ['health'],
 };
 
 // Runs every task concurrently; a failing task is logged and never stops

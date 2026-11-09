@@ -36,6 +36,22 @@ const DEFAULT_SETTINGS = {
     { id: 'simonw',      name: 'Simon Willison',  enabled: true,  type: 'rss', url: 'https://simonwillison.net/atom/everything/', lang: 'en', category: 'ai' },
     { id: 'lesswrong',   name: 'LessWrong',       enabled: false, type: 'rss', url: 'https://www.lesswrong.com/feed.xml', lang: 'en', category: 'ai' },
     { id: 'techcrunch',  name: 'TechCrunch AI',   enabled: false, type: 'rss', url: 'https://techcrunch.com/category/artificial-intelligence/feed/', lang: 'en', category: 'ai' },
+    // Métier : outils, fournisseurs et sécurité (flux vérifiés le 2026-11-09)
+    { id: 'gh-claude-code', name: 'Claude Code (releases)', enabled: true, type: 'rss', url: 'https://github.com/anthropics/claude-code/releases.atom', lang: 'en', category: 'stack' },
+    { id: 'anthropic-news', name: 'Anthropic', enabled: true, type: 'rss', url: 'https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_news.xml', lang: 'en', category: 'stack' },
+    { id: 'mcp-blog', name: 'Blog MCP', enabled: true, type: 'rss', url: 'https://blog.modelcontextprotocol.io/index.xml', lang: 'en', category: 'stack' },
+    { id: 'gh-n8n', name: 'n8n (releases)', enabled: true, type: 'rss', url: 'https://github.com/n8n-io/n8n/releases.atom', lang: 'en', category: 'stack' },
+    { id: 'n8n-blog', name: 'Blog n8n', enabled: true, type: 'rss', url: 'https://blog.n8n.io/rss/', lang: 'en', category: 'stack' },
+    { id: 'gh-litellm', name: 'LiteLLM (releases)', enabled: true, type: 'rss', url: 'https://github.com/BerriAI/litellm/releases.atom', lang: 'en', category: 'stack' },
+    { id: 'gh-langfuse', name: 'Langfuse (releases)', enabled: true, type: 'rss', url: 'https://github.com/langfuse/langfuse/releases.atom', lang: 'en', category: 'stack' },
+    { id: 'otel-blog', name: 'OpenTelemetry', enabled: true, type: 'rss', url: 'https://opentelemetry.io/blog/index.xml', lang: 'en', category: 'stack' },
+    { id: 'grafana-blog', name: 'Grafana Labs', enabled: true, type: 'rss', url: 'https://grafana.com/blog/index.xml', lang: 'en', category: 'stack' },
+    { id: 'foundry-blog', name: 'Microsoft Foundry', enabled: true, type: 'rss', url: 'https://devblogs.microsoft.com/foundry/feed/', lang: 'en', category: 'stack' },
+    { id: 'gcloud-ai', name: 'Google Cloud IA', enabled: true, type: 'rss', url: 'https://cloudblog.withgoogle.com/products/ai-machine-learning/rss/', lang: 'en', category: 'stack' },
+    { id: 'owasp-genai', name: 'OWASP GenAI Security', enabled: true, type: 'rss', url: 'https://genai.owasp.org/feed/', lang: 'en', category: 'stack' },
+    { id: 'latent', name: 'Latent Space', enabled: true, type: 'rss', url: 'https://www.latent.space/feed', lang: 'en', category: 'stack' },
+    { id: 'ai-act', name: 'EU AI Act Newsletter', enabled: true, type: 'rss', url: 'https://artificialintelligenceact.substack.com/feed', lang: 'en', category: 'stack' },
+    { id: 'eba', name: 'EBA', enabled: true, type: 'rss', url: 'https://www.eba.europa.eu/rss.xml', lang: 'en', category: 'stack' },
     // French — IA
     { id: 'actuia',      name: 'ActuIA',          enabled: true,  type: 'rss', url: 'https://www.actuia.com/feed/', lang: 'fr', category: 'ai' },
     // French — Tech non-IA
@@ -146,6 +162,19 @@ function migrate(merged) {
   if (!merged.settings.youtube) merged.settings.youtube = { channels: [] };
   if (!Array.isArray(merged.settings.youtube.channels) || merged.settings.youtube.channels.length === 0) {
     merged.settings.youtube.channels = structuredClone(DEFAULT_SETTINGS.youtube.channels);
+  }
+
+  // Sources v2 (2026-11-09): add the work-oriented feeds a synced profile
+  // does not know yet, and switch off consumer tech news. Runs once; the
+  // user can turn anything back on in Réglages.
+  if ((merged.settings.sourcesRev || 1) < 2) {
+    const have = new Set(merged.settings.aiSources.map(x => x.id));
+    for (const src of DEFAULT_SETTINGS.aiSources) {
+      if (src.category === 'stack' && !have.has(src.id)) merged.settings.aiSources.push(structuredClone(src));
+    }
+    const consumer = new Set(['numerama', 'frandroid', 'siecle', 'korben', 'google-ai']);
+    for (const src of merged.settings.aiSources) if (consumer.has(src.id)) src.enabled = false;
+    merged.settings.sourcesRev = 2;
   }
 
   const channels = merged.settings.youtube.channels;

@@ -7,6 +7,7 @@ import { escapeHTML, fetchWithTimeout, timeAgo, haptic, safeUrl } from './util.j
 import { getSettings, getState, cacheGet, cacheSet } from './state.js';
 import { isConfigured as llmConfigured, complete } from './llm.js';
 import { nextJAndRer } from './trains.js';
+import { readerProfile } from './digest.js';
 
 async function getTransport() {
   // 45 s TTL (not 60) so the 60 s softRefresh tick never lands on a
@@ -35,9 +36,11 @@ function saveGreeting(g) {
   try { localStorage.setItem(GREETING_KEY, JSON.stringify(g)); } catch {}
 }
 
-const SYSTEM_HOME = `Tu écris l'ouverture du tableau de bord de Nicolas, ingénieur IA et automatisation (LiteLLM, n8n, modèles génératifs).
-3 phrases maximum, en français, texte plat. Pas de Markdown, pas d'emoji, pas de « Bonjour ».
-Style : neutre, factuel, précis. Tu pointes ce qui compte aujourd'hui en t'appuyant sur les données fournies. Tu peux suggérer une priorité concrète.
+const systemHome = () => `Tu écris l'ouverture du tableau de bord de Nicolas. Son profil :
+${readerProfile()}
+
+3 phrases maximum, en français, texte plat. Pas de Markdown, pas d'emoji, pas de « Bonjour », pas de tiret cadratin.
+Style : neutre, factuel, précis. Tu pointes ce qui compte aujourd'hui pour son travail en t'appuyant sur les données fournies, et tu peux suggérer une action concrète (tester, vérifier, prévenir ses équipes).
 Interdit : flatterie, généralités, formules creuses, "à ne pas manquer".`;
 
 function weatherLabelFromCode(c) {
@@ -79,10 +82,10 @@ async function fetchWeather() {
 
 function getDigestHeadlines() {
   try {
-    const raw = localStorage.getItem('bob-digest-v2');
+    const raw = localStorage.getItem('bob-digest-v3');
     if (!raw) return [];
     const d = JSON.parse(raw);
-    return (d.headlines || []).slice(0, 2);
+    return (d.headlines || []).slice(0, 3);
   } catch { return []; }
 }
 
@@ -388,7 +391,7 @@ export class HomeWidget {
       if (!href) return '';
       return `
       <a class="home-prio" href="${escapeHTML(href)}" target="_blank" rel="noopener noreferrer">
-        <span class="home-prio__source">${escapeHTML(h.source || '')} · ${escapeHTML(timeAgo(new Date(h.date)))}</span>
+        <span class="home-prio__source">${h.rubric ? `${escapeHTML(h.rubric)} · ` : ''}${escapeHTML(h.source || '')} · ${escapeHTML(timeAgo(new Date(h.date)))}</span>
         <span class="home-prio__title">${escapeHTML(h.title || '')}</span>
         ${h.why ? `<span class="home-prio__why">${escapeHTML(h.why)}</span>` : ''}
       </a>
@@ -440,7 +443,7 @@ export class HomeWidget {
       const prompt = buildGreetingPrompt(this.context);
       const text = await complete(
         [
-          { role: 'system', content: SYSTEM_HOME },
+          { role: 'system', content: systemHome() },
           { role: 'user', content: prompt },
         ],
         { temperature: 0.45, maxTokens: 220 },
@@ -476,7 +479,7 @@ function buildGreetingPrompt(c) {
   if (c.weather) lines.push(`Météo : ${c.weather.temp}°C, ${weatherLabelFromCode(c.weather.code)}.`);
   if (c.headlines && c.headlines.length) {
     lines.push(`Actu tech du jour :`);
-    c.headlines.forEach(h => lines.push(`- ${h.source} — ${h.title}${h.why ? ' (' + h.why + ')' : ''}`));
+    c.headlines.forEach(h => lines.push(`- [${h.rubric || 'Actu'}] ${h.source} : ${h.title}${h.why ? ' (' + h.why + ')' : ''}`));
   }
   // Volontairement SANS trains, agenda ni écriture — l'ouverture parle surtout
   // de l'actu tech (et de la météo).

@@ -2101,6 +2101,7 @@ body.project-open .tabbar { display: none; }
 .input::placeholder { color: var(--text-faint); }
 .input:focus { outline: none; border-color: var(--accent); }
 .input[type="password"] { letter-spacing: 0.04em; }
+.input--area { font-size: var(--fs-sm); line-height: 1.55; resize: vertical; min-height: 220px; }
 
 .label-row { display: flex; align-items: center; gap: 10px; font-size: var(--fs-sm); margin-bottom: 8px; }
 .label-row input[type="checkbox"],

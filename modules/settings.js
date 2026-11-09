@@ -5,6 +5,7 @@ import {
   addEncombrantDate, removeEncombrantDate,
   exportData, importData, resetAll, buildSyncPayload,
 } from './state.js';
+import { DEFAULT_PROFILE } from './digest.js';
 import { ENCOMBRANTS_PATTERNS } from './bins.js';
 import { escapeHTML } from './util.js';
 import {
@@ -167,6 +168,12 @@ export class SettingsPanel {
 
       ${this.groupLabel('Veille')}
 
+      ${this.section('profile', 'Profil de veille', dim(s.veilleProfile ? 'personnalisé' : 'par défaut'), `
+        <div class="settings-section__desc">Ce que l'éditorial et l'ouverture du jour savent de ton métier. Thèmes publics uniquement.</div>
+        <textarea class="input input--area" rows="12" data-field="veilleProfile" spellcheck="false">${escapeHTML(s.veilleProfile || DEFAULT_PROFILE)}</textarea>
+        <button class="link-btn" type="button" data-action="profile-reset">Revenir au profil par défaut</button>
+      `)}
+
       ${this.section('rss', 'Sources articles', dim(`${rssOn} active${rssOn > 1 ? 's' : ''} / ${s.aiSources.length}`), `
         <div class="crud-list crud-list--compact">
           ${s.aiSources.map(src => `
@@ -286,6 +293,12 @@ export class SettingsPanel {
           case 'llmAuthStyle':       settings.llm.authStyle = v; break;
           case 'llmFormat':          settings.llm.format = v; break;
           case 'llmEnabled':         settings.llm.enabled = !!v; break;
+          case 'veilleProfile': {
+            const t = v.trim();
+            settings.veilleProfile = t === DEFAULT_PROFILE.trim() ? '' : t;
+            try { localStorage.removeItem('bob-digest-v3'); } catch {}
+            break;
+          }
           case 'alertTrains':        (settings.alerts = settings.alerts || {}).trainAlerts = !!v; pushMonitoring(); break;
           case 'alertBrief':         (settings.alerts = settings.alerts || {}).morningBrief = !!v; pushMonitoring(); break;
           case 'alertHealth':        (settings.alerts = settings.alerts || {}).healthReminder = !!v; pushMonitoring(); break;
@@ -429,6 +442,15 @@ export class SettingsPanel {
           statusEl.textContent = 'Échec : ' + (err.message || err);
           statusEl.style.color = 'var(--danger)';
         }
+        return;
+      }
+      if (action === 'profile-reset') {
+        getSettings().veilleProfile = '';
+        try { localStorage.removeItem('bob-digest-v3'); } catch {}
+        save();
+        const area = this.root.querySelector('[data-field="veilleProfile"]');
+        if (area) area.value = DEFAULT_PROFILE;
+        this.onChange();
         return;
       }
       if (action === 'llm-ping') {

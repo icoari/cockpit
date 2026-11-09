@@ -10,7 +10,7 @@ import { generateDigest } from './digest.js';
 import { markAiRead, isAiRead, getSettings } from './state.js';
 import { isSyncEnabled } from './sync.js';
 
-const DIGEST_KEY = 'bob-digest-v2';
+const DIGEST_KEY = 'bob-digest-v3';
 const STALE_AFTER_MS = 4 * 60 * 60 * 1000;   // 4 h
 const AUTO_REFRESH_MS = 8 * 60 * 60 * 1000;  // 8 h since last refresh = auto-regen on open
 
@@ -36,7 +36,7 @@ function renderHeadline(item) {
   const read = isAiRead(item.url);
   const isVideo = item.kind === 'video';
   const eyebrowParts = [
-    kindLabel(item),
+    item.rubric || kindLabel(item),
     item.source,
     timeAgo(new Date(item.date)),
   ].filter(Boolean);

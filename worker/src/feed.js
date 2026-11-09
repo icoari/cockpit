@@ -11,15 +11,13 @@ const SOURCES_MAX_BYTES = 32 * 1024;
 // Curated baseline sources merged with the user's own — these stay fresh
 // even before the user has configured anything on a new device.
 const BASELINE_RSS = [
-  { id: 'anthropic', name: 'Anthropic', url: 'https://www.anthropic.com/news/rss.xml', lang: 'en', kind: 'rss' },
+  // anthropic.com has no feed (404): community mirror of the news page.
+  { id: 'anthropic', name: 'Anthropic', url: 'https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_news.xml', lang: 'en', kind: 'rss' },
   { id: 'openai',    name: 'OpenAI',    url: 'https://openai.com/news/rss.xml',         lang: 'en', kind: 'rss' },
   { id: 'deepmind',  name: 'DeepMind',  url: 'https://deepmind.google/blog/rss.xml',    lang: 'en', kind: 'rss' },
   { id: 'hf',        name: 'Hugging Face', url: 'https://huggingface.co/blog/feed.xml', lang: 'en', kind: 'rss' },
   { id: 'simonw',    name: 'Simon Willison', url: 'https://simonwillison.net/atom/everything/', lang: 'en', kind: 'rss' },
   { id: 'latent',    name: 'Latent Space', url: 'https://www.latent.space/feed', lang: 'en', kind: 'rss' },
-  { id: 'arxiv-ai',  name: 'arXiv cs.AI', url: 'https://export.arxiv.org/rss/cs.AI', lang: 'en', kind: 'rss' },
-  { id: 'arxiv-cl',  name: 'arXiv cs.CL', url: 'https://export.arxiv.org/rss/cs.CL', lang: 'en', kind: 'rss' },
-  { id: 'arxiv-lg',  name: 'arXiv cs.LG', url: 'https://export.arxiv.org/rss/cs.LG', lang: 'en', kind: 'rss' },
 ];
 
 export async function handleGetFeed(request, env, ctx) {
@@ -93,6 +91,7 @@ export async function handleSources(request, env) {
 // ---- Aggregation --------------------------------------------------------
 
 const FEED_MAX_AGE_DAYS = 14;
+const PRERELEASE = /nightly|[-.](rc|dev|beta|alpha|canary|pre)(\b|\.|\d)|\brc\d|pre-?release|^(stable|beta|latest|next|nightly)$/i;
 const FEED_MAX_PER_SOURCE = 6;
 const FEED_TOTAL_CAP = 200;
 const LOW_QUALITY_TITLE = /\b(promo|bon\s*plan|soldes?|deal|code\s*promo|coupon|black\s*friday|cyber\s*monday|discount|giveaway|sponsored|à\s*\-?\d+\s*%)\b/i;
@@ -240,6 +239,8 @@ function parseRssOrAtom(xml, src) {
       || ''
     )).slice(0, 280);
     if (!title || !link) continue;
+    // GitHub release feeds: keep stable versions, skip nightlies and previews.
+    if (PRERELEASE.test(title) && /github\.com\/[^/]+\/[^/]+\/releases/.test(link)) continue;
     out.push({
       kind: 'article',
       id: link,
